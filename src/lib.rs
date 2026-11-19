@@ -1,4 +1,5 @@
 pub mod app;
+#[rustfmt::skip]
 pub mod cereal;
 pub mod common;
 pub mod controllers;

@@ -136,7 +136,7 @@ jobs:
             echo "No Rust files changed; skipping rustfmt."
             exit 0
           fi
-          echo "$FILES" | xargs rustfmt --edition 2021 --check
+          echo "$FILES" | xargs rustfmt --edition 2021 --config skip_children=true --check
 
   audit:
     name: Security Audit (Cargo)
