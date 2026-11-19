@@ -1,7 +1,8 @@
 max_width = 100
-comment_width = 80
-wrap_comments = true
-imports_granularity = "Crate"
 use_small_heuristics = "Default"
-group_imports = "StdExternalCrate"
-format_strings = true
+# Nightly-only rustfmt options (commented out for stable toolchain):
+# comment_width = 80
+# wrap_comments = true
+# imports_granularity = "Crate"
+# group_imports = "StdExternalCrate"
+# format_strings = true

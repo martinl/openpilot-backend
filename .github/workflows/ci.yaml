@@ -37,12 +37,36 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+    outputs:
+      frontend_changed: ${{ steps.changes.outputs.frontend }}
+      minikeyvalue_changed: ${{ steps.changes.outputs.minikeyvalue }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Detect changed components for PRs
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "minikeyvalue=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD || true)
+          if echo "$CHANGED" | grep -qE '^(frontend|Dockerfile\.frontend|deploy/docker/|\.github/workflows/ci\.yaml)'; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$CHANGED" | grep -qE '^(minikeyvalue|\.github/workflows/ci\.yaml)'; then
+            echo "minikeyvalue=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "minikeyvalue=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Lint Dockerfile (backend)
         uses: hadolint/hadolint-action@v3.5.0
@@ -180,10 +204,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Shallow checkout openpilot submodule (cereal schemas)
+      - name: Shallow checkout openpilot cereal & opendbc_repo schemas
         run: |
-          git submodule sync --recursive openpilot
-          git submodule update --init --recursive --depth 1 openpilot
+          git submodule sync openpilot
+          git submodule update --init --depth 1 openpilot
+          git -C openpilot submodule sync opendbc_repo
+          git -C openpilot submodule update --init --depth 1 opendbc_repo
 
       - name: Install native build dependencies
         run: |
@@ -231,10 +257,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Shallow checkout openpilot submodule (cereal schemas)
+      - name: Shallow checkout openpilot cereal & opendbc_repo schemas
         run: |
-          git submodule sync --recursive openpilot
-          git submodule update --init --recursive --depth 1 openpilot
+          git submodule sync openpilot
+          git submodule update --init --depth 1 openpilot
+          git -C openpilot submodule sync opendbc_repo
+          git -C openpilot submodule update --init --depth 1 opendbc_repo
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -288,6 +316,7 @@ jobs:
   build-frontend:
     name: Build & Push Frontend Image
     needs: [lint, rustfmt, audit, check-and-test]
+    if: github.event_name != 'pull_request' || needs.lint.outputs.frontend_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -356,6 +385,7 @@ jobs:
   build-minikeyvalue:
     name: Build & Push MiniKeyValue Image
     needs: [lint, rustfmt, audit, check-and-test]
+    if: github.event_name != 'pull_request' || needs.lint.outputs.minikeyvalue_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
