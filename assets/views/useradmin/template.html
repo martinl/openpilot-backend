@@ -1278,7 +1278,7 @@
     }
   </script>
 
-  <title>{{ onebox }} - Stable Useradmin</title>
+  <title>{{ onebox }} - Connect Useradmin</title>
   </head>
 <body>
   <header class="site-header">
@@ -1300,7 +1300,7 @@
       <input name="onebox" class="search-input" placeholder="Search for username, route, or dongle ID" value="{{ onebox }}">
     </form>
     {% if dongle_id is defined and dongle_id %}
-    <div class="results-banner">Show in Stable: <strong><a href="https://stable.konik.ai/{{ dongle_id }}/">{{ dongle_id }}</a></strong></div>
+    <div class="results-banner">Show in Connect: <strong><a href="{{ frontend_url }}/{{ dongle_id }}/">{{ dongle_id }}</a></strong></div>
     {% endif %}
     {% if devices.defined is defined %}
     <details>
@@ -1332,12 +1332,12 @@
               {% endif %}
               <td>
                 <a
-                  href="https://stable.konik.ai/{{ device.dongle_id }}/"
+                  href="{{ frontend_url }}/{{ device.dongle_id }}/"
                   class="nav-link"
                   target="_blank"
                   rel="noopener"
                 >
-                  Open in Stable
+                  Open in Connect
                 </a>
               </td>
               <td><button onclick="deleteDevice('{{ device.dongle_id }}')" title="Unpair and Delete Device Data">🗑️</button></td>

@@ -221,12 +221,20 @@ pub struct DeviceClaims {
     pub exp: usize,
 }
 
+fn auth_cookie_name() -> String {
+    std::env::var("COOKIE_NAME")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| AUTH_COOKIE_NAME.to_string())
+}
+
 fn extract_token(parts: &mut Parts) -> Result<String, AuthError> {
     // Attempt to extract the token from the query string
     extract_token_from_query(QUERY_TOKEN_PREFIX, parts)
         .or_else(|_| {
             // If extracting from the query string fails, attempt to extract from cookies
-            extract_token_from_cookie(AUTH_COOKIE_NAME, parts)
+            let cookie_name = auth_cookie_name();
+            extract_token_from_cookie(&cookie_name, parts)
         })
         .or_else(|_| {
             // If extracting from cookies fails, attempt to extract from the authorization header

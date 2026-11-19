@@ -230,9 +230,14 @@ async fn github_redirect_handler(
             return Err(StatusCode::BAD_REQUEST);
         }
         let service_url = parts[1];
+        let scheme = if service_url.starts_with("localhost") || service_url.starts_with("127.0.0.1") {
+            "http"
+        } else {
+            "https"
+        };
         let redirect_url = format!(
-            "http://{}/auth/?provider=h&code={}",
-            service_url, params.code
+            "{}://{}/auth/?provider=h&code={}",
+            scheme, service_url, params.code
         ); // handle openpilot tools auth
 
         let mut headers = HeaderMap::new();
@@ -365,13 +370,20 @@ pub async fn get_auth(
         .or_else(|_| unauthorized("Failed to generate token!"))?;
 
     // Set cookie and redirect
+    let cookie_name = env::var("COOKIE_NAME")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| "jwt".to_string());
+    let cookie_value = match env::var("COOKIE_DOMAIN").ok().filter(|v| !v.trim().is_empty()) {
+        Some(domain) => format!(
+            "{}={}; Path=/; HttpOnly; Secure; SameSite=Lax; Domain={};",
+            cookie_name, token, domain
+        ),
+        None => format!("{}= {}; Path=/; HttpOnly; Secure; SameSite=Lax;", cookie_name, token)
+            .replace("= ", "="),
+    };
     let mut headers = HeaderMap::new();
-    headers.insert(
-        header::SET_COOKIE,
-        format!("jwt={}; Path=/; HttpOnly; Secure; Domain=.konik.ai;", token)
-            .parse()
-            .unwrap(),
-    );
+    headers.insert(header::SET_COOKIE, cookie_value.parse().unwrap());
 
     // Construct the redirect response manually
     let response = Response::builder()
