@@ -45,13 +45,13 @@ jobs:
           persist-credentials: false
 
       - name: Lint Dockerfile (backend)
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile
           failure-threshold: error
 
       - name: Lint Dockerfile.frontend
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile.frontend
           failure-threshold: error
