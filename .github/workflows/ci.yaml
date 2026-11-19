@@ -21,8 +21,6 @@ concurrency:
 
 env:
   RUST_TOOLCHAIN: "1.90.0"
-  CC: clang
-  CXX: clang++
   RUST_MIN_STACK: "134217728"
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository }}
@@ -169,7 +167,7 @@ jobs:
 
   check-and-test:
     name: Clippy & Tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
       contents: read
@@ -215,10 +213,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang libclang-dev pkg-config libpq-dev libssl-dev \
-            libavutil-dev libavformat-dev libavcodec-dev libavdevice-dev \
-            libavfilter-dev libswscale-dev libswresample-dev \
-            capnproto ffmpeg
+            pkg-config libpq-dev libssl-dev capnproto ffmpeg
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master

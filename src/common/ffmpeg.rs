@@ -1,28 +1,15 @@
-use ffmpeg_next as ffmpeg;
 use std::{
-    env,
-    io,
-    path::{Path as FsPath},
+    env, io,
+    path::Path as FsPath,
     process::{Command, Stdio},
     sync::OnceLock,
     time::Duration,
 };
 
-
-
-static FFMPEG_INIT: OnceLock<Result<(), String>> = OnceLock::new();
 static AUTO_GPU_ENCODER: OnceLock<Option<String>> = OnceLock::new();
 
 fn io_other<E: std::fmt::Display>(e: E) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, e.to_string())
-}
-
-pub fn ensure_ffmpeg_init() -> Result<(), io::Error> {
-    FFMPEG_INIT
-        .get_or_init(|| ffmpeg::init().map_err(|e| e.to_string()))
-        .as_ref()
-        .map_err(|e| io_other(format!("ffmpeg init failed: {e}")))?;
-    Ok(())
+    io::Error::other(e.to_string())
 }
 
 fn detect_gpu_encoder() -> Option<String> {
@@ -168,9 +155,11 @@ pub async fn probe_duration_seconds(
     }
 
     let duration_raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let duration: f32 = duration_raw
-        .parse()
-        .map_err(|e| io_other(format!("ffprobe returned invalid duration `{duration_raw}`: {e}")))?;
+    let duration: f32 = duration_raw.parse().map_err(|e| {
+        io_other(format!(
+            "ffprobe returned invalid duration `{duration_raw}`: {e}"
+        ))
+    })?;
 
     if !duration.is_finite() || duration.is_sign_negative() {
         return Err(io_other(format!(
