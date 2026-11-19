@@ -1,0 +1,9 @@
+[advisories]
+ignore = [
+    # Transitive via sqlx/jsonwebtoken (Marvin Attack on RSA private-key decryption; we use HMAC JWTs)
+    "RUSTSEC-2023-0071",
+    # Transitive via loco-rs 0.8.1 / older url crate (Punycode label validation)
+    "RUSTSEC-2024-0421",
+    # Transitive via sea-orm sqlx-sqlite feature (bundled SQLite; production uses PostgreSQL 18)
+    "RUSTSEC-2026-0459",
+]

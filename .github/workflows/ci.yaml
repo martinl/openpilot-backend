@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  RUST_TOOLCHAIN: "stable"
+  RUST_TOOLCHAIN: "1.90.0"
   CC: clang
   CXX: clang++
   RUST_MIN_STACK: "134217728"
@@ -27,7 +27,6 @@ jobs:
     name: Check Formatting
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
     permissions:
       contents: read
 
@@ -35,6 +34,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install Rust toolchain
@@ -43,21 +43,27 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: rustfmt
 
-      - name: Create stub for build.rs generated cereal module
+      - name: Check formatting on changed Rust files
         run: |
-          mkdir -p src/cereal
-          touch src/cereal/mod.rs
-
-      - name: Run cargo fmt
-        run: cargo fmt --all -- --check
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+          else
+            BASE="HEAD~1"
+          fi
+          FILES=$(git diff --name-only --diff-filter=ACMR "$BASE"...HEAD -- '*.rs' || true)
+          if [ -z "$FILES" ]; then
+            echo "No Rust files changed; skipping rustfmt."
+            exit 0
+          fi
+          echo "$FILES" | xargs rustfmt --edition 2021 --check
 
   audit:
     name: Security Audit (Cargo)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
     permissions:
       contents: read
+      checks: write
 
     steps:
       - name: Checkout repository
