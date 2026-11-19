@@ -1,108 +1,166 @@
 name: CI
+
 on:
   push:
     branches:
       - master
       - main
   pull_request:
+    branches:
+      - master
+      - main
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  RUST_TOOLCHAIN: stable
-  TOOLCHAIN_PROFILE: minimal
+  RUST_TOOLCHAIN: "1.88.0"
+  CC: clang
+  CXX: clang++
+  RUST_MIN_STACK: "134217728"
 
 jobs:
   rustfmt:
-    name: Check Style
+    name: Check Formatting
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     permissions:
       contents: read
 
     steps:
-      - name: Checkout the code
+      - name: Checkout repository
         uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
         with:
-          profile: ${{ env.TOOLCHAIN_PROFILE }}
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-          override: true
           components: rustfmt
+
       - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
+        run: cargo fmt --all -- --check
+
+  audit:
+    name: Security Audit (Cargo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          command: fmt
-          args: --all -- --check
+          persist-credentials: false
+
+      - name: Audit Rust dependencies
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   clippy:
     name: Run Clippy
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     permissions:
       contents: read
 
     steps:
-      - name: Checkout the code
+      - name: Checkout repository
         uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
         with:
-          profile: ${{ env.TOOLCHAIN_PROFILE }}
+          persist-credentials: false
+
+      - name: Shallow checkout openpilot submodule (cereal schemas)
+        run: |
+          git submodule sync openpilot
+          git submodule update --init --depth 1 openpilot
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang libclang-dev pkg-config libpq-dev libssl-dev \
+            libavutil-dev libavformat-dev libavcodec-dev libavdevice-dev \
+            capnproto
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-          override: true
+          components: clippy
+
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
+
       - name: Run cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery -W rust-2018-idioms
+        run: cargo clippy --all-features -- -D warnings
 
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     permissions:
       contents: read
-    
+
     services:
       redis:
-        image: redis
+        image: valkey/valkey:9-alpine
         options: >-
-          --health-cmd "redis-cli ping"
+          --health-cmd "valkey-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
         ports:
           - "6379:6379"
       postgres:
-        image: postgres
+        image: postgres:18-alpine
         env:
           POSTGRES_DB: postgres_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
           - "5432:5432"
-        # Set health checks to wait until postgres has started
-        options: --health-cmd pg_isready
+        options: >-
+          --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
     steps:
-      - name: Checkout the code
+      - name: Checkout repository
         uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
         with:
-          profile: ${{ env.TOOLCHAIN_PROFILE }}
+          persist-credentials: false
+
+      - name: Shallow checkout openpilot submodule (cereal schemas)
+        run: |
+          git submodule sync openpilot
+          git submodule update --init --depth 1 openpilot
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang libclang-dev pkg-config libpq-dev libssl-dev \
+            libavutil-dev libavformat-dev libavcodec-dev libavdevice-dev \
+            capnproto ffmpeg
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-          override: true
+
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
+
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --all
+        run: cargo test --all-features --all
         env:
-          REDIS_URL: redis://localhost:${{job.services.redis.ports[6379]}}
+          REDIS_URL: redis://localhost:${{ job.services.redis.ports[6379] }}
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres_test
-          

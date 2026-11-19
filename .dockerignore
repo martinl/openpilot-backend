@@ -1,6 +1,4 @@
 target/
-frontend/node_modules
-target/
 .git/
 **/*.rs.bk
 **/*.swp
@@ -14,4 +12,8 @@ tmp/
 .cargo/
 backup/
 capnproto-rust/
+my-comma-auth/
 .devcontainer/
+deploy/*
+!deploy/docker/
+PLAN.md
