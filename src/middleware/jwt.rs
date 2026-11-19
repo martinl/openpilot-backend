@@ -25,9 +25,9 @@ pub struct UserClaims {
 ///
 /// # Example
 /// ```rust
-/// use loco_rs::auth;
+/// use connect::middleware::jwt;
 ///
-/// auth::jwt::JWT::new("PqRwLF2rhHe8J22oBeHy");
+/// jwt::JWT::new("PqRwLF2rhHe8J22oBeHy");
 /// ```
 pub struct JWT {
     secret: String,
@@ -95,8 +95,8 @@ impl JWT {
     ///
     /// # Example
     /// ```rust
-    /// use loco_rs::auth;
-    /// auth::jwt::JWT::new("PqRwLF2rhHe8J22oBeHy").validate("JWT-TOKEN");
+    /// use connect::middleware::jwt;
+    /// jwt::JWT::new("PqRwLF2rhHe8J22oBeHy").validate("JWT-TOKEN");
     /// ```
     pub fn validate(&self, token: &str) -> JWTResult<TokenData<UserClaims>> {
         decode::<UserClaims>(

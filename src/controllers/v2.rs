@@ -1,4 +1,5 @@
 #![allow(clippy::unused_async)]
+use crate::loco_rs::prelude::*;
 use axum::{
     body::Body,
     extract::{Form, Query, State},
@@ -7,7 +8,6 @@ use axum::{
 };
 use hex;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
-use loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::env;
@@ -115,7 +115,10 @@ pub async fn pilotauth(
         }
         Err(result) => {
             tracing::error!("Failed to register device: {} {}", dongle_id, result);
-            return (StatusCode::FORBIDDEN, Err(loco_rs::Error::Model(result)));
+            return (
+                StatusCode::FORBIDDEN,
+                Err(crate::loco_rs::Error::Model(result)),
+            );
         }
     }
 }
@@ -230,7 +233,8 @@ async fn github_redirect_handler(
             return Err(StatusCode::BAD_REQUEST);
         }
         let service_url = parts[1];
-        let scheme = if service_url.starts_with("localhost") || service_url.starts_with("127.0.0.1") {
+        let scheme = if service_url.starts_with("localhost") || service_url.starts_with("127.0.0.1")
+        {
             "http"
         } else {
             "https"
@@ -264,7 +268,10 @@ struct GithubEmail {
     verified: bool,
 }
 
-async fn fetch_github_primary_email(client: &reqwest::Client, access_token: &str) -> Option<String> {
+async fn fetch_github_primary_email(
+    client: &reqwest::Client,
+    access_token: &str,
+) -> Option<String> {
     let response = client
         .get("https://api.github.com/user/emails")
         .header("Authorization", format!("Bearer {}", access_token))
@@ -374,13 +381,19 @@ pub async fn get_auth(
         .ok()
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_else(|| "jwt".to_string());
-    let cookie_value = match env::var("COOKIE_DOMAIN").ok().filter(|v| !v.trim().is_empty()) {
+    let cookie_value = match env::var("COOKIE_DOMAIN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    {
         Some(domain) => format!(
             "{}={}; Path=/; HttpOnly; Secure; SameSite=Lax; Domain={};",
             cookie_name, token, domain
         ),
-        None => format!("{}= {}; Path=/; HttpOnly; Secure; SameSite=Lax;", cookie_name, token)
-            .replace("= ", "="),
+        None => format!(
+            "{}= {}; Path=/; HttpOnly; Secure; SameSite=Lax;",
+            cookie_name, token
+        )
+        .replace("= ", "="),
     };
     let mut headers = HeaderMap::new();
     headers.insert(header::SET_COOKIE, cookie_value.parse().unwrap());

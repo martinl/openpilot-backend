@@ -1,4 +1,6 @@
 #![allow(clippy::unused_async)]
+use crate::loco_rs::app::AppContext;
+use crate::loco_rs::prelude::*;
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -10,8 +12,6 @@ use axum::{
     Extension,
 };
 use futures_util::{SinkExt, StreamExt};
-use loco_rs::app::AppContext;
-use loco_rs::prelude::*;
 use sea_orm::{ActiveModelTrait, ActiveValue, IntoActiveModel};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};

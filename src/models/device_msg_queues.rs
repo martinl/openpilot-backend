@@ -1,7 +1,7 @@
 pub use super::_entities::device_msg_queues::{self, ActiveModel, Column, Entity, Model as DMQM};
 use crate::controllers::ws::JsonRpcRequest;
+use crate::loco_rs::prelude::*;
 use chrono::prelude::Utc;
-use loco_rs::prelude::*;
 use sea_orm::{ActiveValue, QueryOrder, QuerySelect};
 
 #[async_trait::async_trait]

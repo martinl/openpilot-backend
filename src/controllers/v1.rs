@@ -1,3 +1,4 @@
+use crate::loco_rs::prelude::*;
 use axum::{
     extract::{Path, Query, State},
     http::{header, HeaderMap},
@@ -6,7 +7,6 @@ use axum::{
 };
 use hmac::{Hmac, Mac};
 use jsonwebtoken::get_current_timestamp;
-use loco_rs::prelude::*;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -24,12 +24,8 @@ use crate::{
     common,
     middleware::{auth::MyJWT, jwt},
     models::{
-        authorized_users::Model as AUM,
-        device_msg_queues::DMQM,
-        devices::DM,
-        routes::RM,
-        segments::SM,
-        users::UM,
+        authorized_users::Model as AUM, device_msg_queues::DMQM, devices::DM, routes::RM,
+        segments::SM, users::UM,
     },
 };
 
@@ -95,7 +91,9 @@ fn frontend_rewrite_config() -> &'static FrontendRewriteConfig {
 
 fn should_rewrite_to_frontend(headers: &HeaderMap) -> bool {
     let config = frontend_rewrite_config();
-    let referer = headers.get(header::REFERER).and_then(|value| value.to_str().ok());
+    let referer = headers
+        .get(header::REFERER)
+        .and_then(|value| value.to_str().ok());
     match (referer, config.frontend_endpoint.as_deref()) {
         (Some(referer), Some(frontend_endpoint)) => {
             referer.starts_with(frontend_endpoint.trim_end_matches('/'))
@@ -600,7 +598,7 @@ async fn device_location(
 
         format::json(response)
     } else {
-        return loco_rs::controller::bad_request("Devices can't do this");
+        return crate::loco_rs::controller::bad_request("Devices can't do this");
     }
 }
 
@@ -627,12 +625,14 @@ async fn set_firehose(
             DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
         }
     } else {
-        return loco_rs::controller::bad_request("devices can't do this");
+        return crate::loco_rs::controller::bad_request("devices can't do this");
     }
 
     let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
     if device_model.dongle_id != dongle_id {
-        return loco_rs::controller::unauthorized("device does not match dongle_id in request");
+        return crate::loco_rs::controller::unauthorized(
+            "device does not match dongle_id in request",
+        );
     }
 
     let mut active_device_model = device_model.into_active_model();
@@ -656,7 +656,9 @@ async fn device_stats(
         }
     } else {
         if auth.device_model.unwrap().dongle_id != dongle_id {
-            return loco_rs::controller::bad_request("identity does not match dongle_id in request");
+            return crate::loco_rs::controller::bad_request(
+                "identity does not match dongle_id in request",
+            );
         }
     }
     // Get the current time in milliseconds since the UNIX epoch
@@ -707,7 +709,7 @@ async fn device_users(
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
     let Some(user_model) = auth.user_model else {
-        return loco_rs::controller::unauthorized("Unauthorized");
+        return crate::loco_rs::controller::unauthorized("Unauthorized");
     };
 
     let device_model = if user_model.superuser {
@@ -756,12 +758,12 @@ async fn add_user(
     Json(data): Json<DeviceShareRequest>,
 ) -> Result<Response> {
     let Some(user_model) = auth.user_model else {
-        return loco_rs::controller::unauthorized("Unauthorized");
+        return crate::loco_rs::controller::unauthorized("Unauthorized");
     };
 
     let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
     if !user_model.superuser && device_model.owner_id != Some(user_model.id) {
-        return loco_rs::controller::unauthorized("Only device owners can share devices");
+        return crate::loco_rs::controller::unauthorized("Only device owners can share devices");
     }
 
     let email = data.email.trim();
@@ -807,12 +809,12 @@ async fn del_user(
     Json(data): Json<DeviceShareRequest>,
 ) -> Result<Response> {
     let Some(user_model) = auth.user_model else {
-        return loco_rs::controller::unauthorized("Unauthorized");
+        return crate::loco_rs::controller::unauthorized("Unauthorized");
     };
 
     let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
     if !user_model.superuser && device_model.owner_id != Some(user_model.id) {
-        return loco_rs::controller::unauthorized("Only device owners can unshare devices");
+        return crate::loco_rs::controller::unauthorized("Only device owners can unshare devices");
     }
 
     let target_user = UM::find_by_email(&ctx.db, data.email.trim()).await?;
@@ -850,13 +852,13 @@ async fn route_segment(
             DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
         }
     } else {
-        return loco_rs::controller::bad_request("devices can't do this");
+        return crate::loco_rs::controller::bad_request("devices can't do this");
     }
 
     let mut route_models = if let Some(route_str) = params.route_str {
         let route_model = RM::find_route(&ctx.db, &route_str).await?;
         if route_model.device_dongle_id != dongle_id {
-            return loco_rs::controller::unauthorized("route does not belong to device");
+            return crate::loco_rs::controller::unauthorized("route does not belong to device");
         }
         vec![route_model]
     } else {
@@ -998,7 +1000,7 @@ async fn get_me_jwt(auth: MyJWT, State(ctx): State<AppContext>) -> Result<Respon
     let jwt_secret = ctx.config.get_jwt_config()?;
     let token = jwt::JWT::new(&jwt_secret.secret)
         .generate_token(&(3600 * 24 as u64), auth.claims.identity.to_string())
-        .map_err(|_e| loco_rs::Error::Message("Failed to generate JWT token".to_string()))?;
+        .map_err(|_e| crate::loco_rs::Error::Message("Failed to generate JWT token".to_string()))?;
 
     format::json(GenericResponse {
         success: true,
@@ -1191,7 +1193,10 @@ async fn get_next_destination(
                     ActiveValue::Set(Some(serde_json::to_value(&locations).unwrap()));
                 if let Err(e) = active_device_model.update(&ctx.db).await {
                     tracing::error!("Failed to update device locations. DB Error: {}", e);
-                    return (StatusCode::INTERNAL_SERVER_ERROR, format::json(serde_json::Value::Null))
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format::json(serde_json::Value::Null),
+                    )
                         .into_response();
                 }
             }
@@ -1238,7 +1243,7 @@ async fn put_locations(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Json(destination): Json<PutSavedLocation>,
-) -> Result<Response, loco_rs::Error> {
+) -> Result<Response, crate::loco_rs::Error> {
     let mut active_device;
 
     if let Some(device_model) = auth.device_model {
@@ -1392,7 +1397,7 @@ async fn delete_location(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Json(payload): Json<DeleteLocation>,
-) -> Result<Response, loco_rs::Error> {
+) -> Result<Response, crate::loco_rs::Error> {
     let mut active_device;
 
     if let Some(device_model) = auth.device_model {
@@ -1449,12 +1454,11 @@ async fn delete_location(
     }
 }
 
-
 async fn clear_nav_destination(
     auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
-) -> Result<Response, loco_rs::Error> {
+) -> Result<Response, crate::loco_rs::Error> {
     use crate::controllers::ws::JsonRpcRequest;
 
     let mut active_device;
@@ -1485,7 +1489,9 @@ async fn clear_nav_destination(
 
     let clear_msg = JsonRpcRequest {
         method: "setNavDestination".to_string(),
-        params: Some(serde_json::json!({ "latitude": 0, "longitude": 0, "place_name": null, "place_details": null })),
+        params: Some(
+            serde_json::json!({ "latitude": 0, "longitude": 0, "place_name": null, "place_details": null }),
+        ),
         ..Default::default()
     };
     DMQM::insert_msg(&ctx.db, &dongle_id, clear_msg).await?;
@@ -1494,7 +1500,11 @@ async fn clear_nav_destination(
         Ok(_) => Ok((StatusCode::OK, Json(json!({ "success": true }))).into_response()),
         Err(e) => {
             tracing::error!("Failed to clear nav destination: {}", e);
-            Ok((StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Failed to clear" }))).into_response())
+            Ok((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to clear" })),
+            )
+                .into_response())
         }
     }
 }
@@ -1514,7 +1524,7 @@ async fn set_nav_favorite(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Json(body): Json<SetFavoriteRequest>,
-) -> Result<Response, loco_rs::Error> {
+) -> Result<Response, crate::loco_rs::Error> {
     use crate::controllers::ws::JsonRpcRequest;
 
     if auth.user_model.is_none() && auth.device_model.is_none() {
@@ -1583,9 +1593,6 @@ pub fn routes() -> Routes {
             "/navigation/:dongle_id/next",
             get(get_next_destination).delete(clear_nav_destination),
         )
-        .add(
-            "/navigation/:dongle_id/favorite",
-            post(set_nav_favorite),
-        )
+        .add("/navigation/:dongle_id/favorite", post(set_nav_favorite))
         .add("/iceservers", get(get_ice_servers))
 }

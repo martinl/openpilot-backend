@@ -1,6 +1,6 @@
+use crate::loco_rs::prelude::*;
 use capnp::message::ReaderOptions;
 use futures::TryStreamExt;
-use loco_rs::prelude::*;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;

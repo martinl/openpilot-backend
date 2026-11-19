@@ -1,4 +1,4 @@
-use loco_rs::prelude::*;
+use crate::loco_rs::prelude::*;
 use regex::Regex;
 use reqwest::Client;
 use serde_json::{from_str, Value};

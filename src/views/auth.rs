@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use loco_rs::prelude::*;
+use crate::loco_rs::prelude::*;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LoginResponse {

@@ -1,4 +1,5 @@
 #![allow(clippy::unused_async)]
+use crate::loco_rs::prelude::*;
 use crate::{
     common,
     common::upload_tracker::{ActiveUploadGuard, UploadKind, UploadMeta, UploadTracker},
@@ -13,7 +14,6 @@ use axum::{
 };
 use bytes::BytesMut;
 use futures::StreamExt;
-use loco_rs::prelude::*;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,13 +49,13 @@ fn enforce_upload_auth(
     match validate_upload_auth(auth.device_model.as_ref(), request_dongle_id) {
         Ok(()) => Ok(()),
         Err(UploadAuthError::MissingDeviceAuth) => {
-            loco_rs::controller::unauthorized("Only registered devices can upload")
+            crate::loco_rs::controller::unauthorized("Only registered devices can upload")
         }
         Err(UploadAuthError::UploadsDisabled) => {
-            loco_rs::controller::unauthorized("Uploads ignored")
+            crate::loco_rs::controller::unauthorized("Uploads ignored")
         }
         Err(UploadAuthError::DongleMismatch) => {
-            loco_rs::controller::bad_request("dongle_id does not match identity")
+            crate::loco_rs::controller::bad_request("dongle_id does not match identity")
         }
     }
 }
@@ -317,7 +317,7 @@ pub async fn upload_driving_logs(
         }
     }
     drop(_upload_guard);
-    
+
     let data = buffer.freeze();
     let data_len = data.len() as i64;
 

@@ -1,5 +1,5 @@
+use crate::loco_rs::prelude::*;
 use chrono::{Duration, NaiveDateTime, Utc};
-use loco_rs::prelude::*;
 use reqwest::Client;
 use serde_json::from_str;
 use serde_json::Value;

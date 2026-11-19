@@ -1,6 +1,6 @@
 pub use super::_entities::segments::{self, ActiveModel, Column, Entity, Model as SM};
+use crate::loco_rs::prelude::*;
 use chrono::prelude::Utc;
-use loco_rs::prelude::*;
 use sea_orm::{entity::prelude::*, DeleteResult, QueryOrder, SqlErr};
 use serde::Serialize;
 

@@ -1,20 +1,10 @@
 pub use super::_entities::routes::{self, ActiveModel, Column, Entity, Model as RM};
+use crate::loco_rs::model::{ModelError, ModelResult};
+use crate::loco_rs::prelude::*;
 use chrono::prelude::Utc;
-use loco_rs::model::{ModelError, ModelResult};
-use loco_rs::prelude::*;
 use sea_orm::{
-    entity::prelude::*,
-    ActiveValue,
-    DbBackend,
-    DeleteResult,
-    Order,
-    PaginatorTrait,
-    QueryFilter,
-    QueryOrder,
-    QuerySelect,
-    QueryTrait,
-    SqlErr,
-    Statement,
+    entity::prelude::*, ActiveValue, DbBackend, DeleteResult, Order, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, QueryTrait, SqlErr, Statement,
 };
 
 use sea_orm::sea_query::{Expr, ExprTrait};
@@ -66,7 +56,7 @@ impl RM {
     /// Returns Vec of (day_start_ms, total_miles_for_day)
     pub async fn daily_miles_all_time(db: &DatabaseConnection) -> ModelResult<Vec<(i64, f64)>> {
         let sql = r#"
-                SELECT 
+                SELECT
                     (start_time_utc_millis / 86400000) * 86400000 as day_ms,
                     SUM(CAST(length AS FLOAT8)) as total_miles
                 FROM routes

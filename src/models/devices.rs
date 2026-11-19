@@ -1,8 +1,8 @@
 pub use super::_entities::devices::{self, ActiveModel, Column, Entity, Model as DM};
-use crate::models::_entities::authorized_users as au;
 use crate::controllers::v2::DeviceRegistrationParams;
+use crate::loco_rs::prelude::*;
+use crate::models::_entities::authorized_users as au;
 use chrono::prelude::Utc;
-use loco_rs::prelude::*;
 use sea_orm::entity::prelude::*;
 use sea_orm::{ActiveValue, QueryOrder, TransactionTrait};
 use sea_orm::{DbBackend, Statement};
@@ -38,7 +38,7 @@ impl DM {
     ) -> Result<(Vec<(i64, i64)>, Vec<(i64, i64)>), DbErr> {
         // Registrations per day
         let sql_reg = r#"
-            SELECT 
+            SELECT
                 (EXTRACT(EPOCH FROM created_at)::bigint * 1000 / 86400000) * 86400000 as day_ms,
                 COUNT(*) as cnt
             FROM devices
@@ -56,7 +56,7 @@ impl DM {
 
         // Active pings per day
         let sql_active = r#"
-            SELECT 
+            SELECT
                 (last_athena_ping / 86400000) * 86400000 as day_ms,
                 COUNT(*) as cnt
             FROM devices
@@ -262,7 +262,7 @@ impl DM {
     ) -> Result<(Vec<(String, i64)>, Vec<(String, i64)>), DbErr> {
         // registrations per day
         let sql_reg = r#"
-            SELECT 
+            SELECT
                 to_char(timezone('UTC', created_at), 'YYYY-MM-DD') AS day,
                 COUNT(*)::bigint AS cnt
             FROM devices
@@ -285,7 +285,7 @@ impl DM {
 
         // active pings per day - count devices that had a ping in that day
         let sql_active = r#"
-            SELECT 
+            SELECT
                 to_char(timezone('UTC', to_timestamp(last_athena_ping/1000)), 'YYYY-MM-DD') AS day,
                 COUNT(*)::bigint AS cnt
             FROM devices
