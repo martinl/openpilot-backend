@@ -3,7 +3,7 @@
 # =============================================================================
 # Stage 1: Build connect-cli (Rust + Cap'n Proto + FFmpeg dev libs)
 # =============================================================================
-FROM rust:1.88-bookworm AS builder
+FROM rust:1-bookworm AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CC=clang
@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /usr/src/connect
 
 # Copy manifests and Cap'n Proto schemas first for better layer caching
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml Cargo.lock* ./
 COPY migration/Cargo.toml migration/Cargo.toml
 COPY openpilot/cereal openpilot/cereal
 COPY src/build.rs src/build.rs
@@ -67,16 +67,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libavcodec59 \
     libavdevice59 \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r openpilot && useradd -r -g openpilot -m openpilot \
-    && mkdir -p /app /params && chown -R openpilot:openpilot /app /params
+    && groupadd -g 1000 -r openpilot && useradd -u 1000 -r -g openpilot -m openpilot \
+    && mkdir -p /app /params && chown -R 1000:1000 /app /params
 
 WORKDIR /app
 
 COPY --from=builder /usr/local/bin/connect-cli /app/connect-cli
-COPY --chown=openpilot:openpilot assets/ /app/assets/
-COPY --chown=openpilot:openpilot config/ /app/config/
+COPY --chown=1000:1000 assets/ /app/assets/
+COPY --chown=1000:1000 config/ /app/config/
 
-USER openpilot
+USER 1000:1000
 
 EXPOSE 3112
 
