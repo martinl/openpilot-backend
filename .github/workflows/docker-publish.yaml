@@ -67,7 +67,7 @@ jobs:
           '
 
       - name: Scan repo for secrets & misconfigurations (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -138,7 +138,7 @@ jobs:
           cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,mode=max,scope=backend' || '' }}
 
       - name: Scan backend image for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ github.event_name != 'pull_request' && format('{0}/{1}/backend@{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.build.outputs.digest) || format('{0}/{1}/backend:{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.meta.outputs.version) }}
           severity: CRITICAL,HIGH
@@ -206,7 +206,7 @@ jobs:
           cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,mode=max,scope=frontend' || '' }}
 
       - name: Scan frontend image for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ github.event_name != 'pull_request' && format('{0}/{1}/frontend@{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.build.outputs.digest) || format('{0}/{1}/frontend:{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.meta.outputs.version) }}
           severity: CRITICAL,HIGH
@@ -274,7 +274,7 @@ jobs:
           cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,mode=max,scope=minikeyvalue' || '' }}
 
       - name: Scan minikeyvalue image for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ github.event_name != 'pull_request' && format('{0}/{1}/minikeyvalue@{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.build.outputs.digest) || format('{0}/{1}/minikeyvalue:{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.meta.outputs.version) }}
           severity: CRITICAL,HIGH
