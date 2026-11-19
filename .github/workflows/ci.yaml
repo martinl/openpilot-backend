@@ -99,8 +99,8 @@ jobs:
 
       - name: Shallow checkout openpilot submodule (cereal schemas)
         run: |
-          git submodule sync openpilot
-          git submodule update --init --depth 1 openpilot
+          git submodule sync --recursive openpilot
+          git submodule update --init --recursive --depth 1 openpilot
 
       - name: Install native build dependencies
         run: |
@@ -162,8 +162,8 @@ jobs:
 
       - name: Shallow checkout openpilot submodule (cereal schemas)
         run: |
-          git submodule sync openpilot
-          git submodule update --init --depth 1 openpilot
+          git submodule sync --recursive openpilot
+          git submodule update --init --recursive --depth 1 openpilot
 
       - name: Install native build dependencies
         run: |
