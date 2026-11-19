@@ -64,6 +64,7 @@ pub struct CloudlogsTemplate {
 pub struct MasterTemplate {
     pub api_host: String,
     pub ws_host: String,
+    pub frontend_url: String,
     pub onebox: String,
     pub dongle_id: String,
     pub device_online: Option<bool>,
@@ -126,6 +127,12 @@ pub async fn onebox_handler(
     }
     let api_endpoint: String = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
     let ws_endpoint: String = env::var("WS_ENDPOINT").expect("WS_ENDPOINT env variable not set");
+    let frontend_url: String = env::var("FRONTEND_URL")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| "https://connect.apps.k8s.mlp.ee".to_string())
+        .trim_end_matches('/')
+        .to_string();
 
     let mut master_template = MasterTemplate {
         dongle_id: dongle_id.clone(),
@@ -137,6 +144,7 @@ pub async fn onebox_handler(
         onebox: onebox,
         api_host: api_endpoint,
         ws_host: ws_endpoint,
+        frontend_url,
         ..Default::default()
     };
     if user_model.superuser {
@@ -387,22 +395,55 @@ pub async fn login(
     ViewEngine(v): ViewEngine<TeraView>,
     State(_ctx): State<AppContext>,
 ) -> Result<impl IntoResponse> {
+    let api_host = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
+    let github_client = env::var("GITHUB_CLIENT").unwrap_or_default();
+    let useradmin_host = env::var("USERADMIN_HOST")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| "useradmin.apps.k8s.mlp.ee".to_string());
+    let redirect_uri = format!("{}/v2/auth/h/redirect/", api_host.trim_end_matches('/'));
+    let state = format!("service,{useradmin_host}");
+    let github_oauth_url = url::Url::parse_with_params(
+        "https://github.com/login/oauth/authorize",
+        &[
+            ("client_id", github_client.as_str()),
+            ("redirect_uri", redirect_uri.as_str()),
+            ("state", state.as_str()),
+            ("scope", "read:user user:email"),
+        ],
+    )
+    .expect("Failed to build GitHub OAuth URL")
+    .to_string();
+
     views::auth::login(
         v,
         crate::views::auth::LoginTemplate {
-            api_host: env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
+            api_host,
+            github_oauth_url,
         },
     )
 }
 
 pub async fn logout() -> impl IntoResponse {
     let mut headers = HeaderMap::new();
+    let cookie_name = env::var("COOKIE_NAME")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| "jwt".to_string());
+    let cookie_value = match env::var("COOKIE_DOMAIN").ok().filter(|v| !v.trim().is_empty()) {
+        Some(domain) => format!(
+            "{}=; Domain={}; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
+            cookie_name, domain
+        ),
+        None => format!(
+            "{}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
+            cookie_name
+        ),
+    };
 
     headers.append(
         header::SET_COOKIE,
-        HeaderValue::from_static(
-            "jwt=; Domain=.konik.ai; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly; Secure; SameSite=Lax"
-        ),
+        HeaderValue::from_str(&cookie_value).expect("Invalid logout Set-Cookie header"),
     );
 
     (StatusCode::FOUND, headers, Redirect::to("/login"))

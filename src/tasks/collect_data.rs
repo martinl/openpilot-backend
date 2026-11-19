@@ -53,6 +53,9 @@ async fn websocket_client_task(server_url: &str, dongle_id: &str, jwt: &str) {
             Ok(Message::Text(text)) => {
                 if let Ok(data) = serde_json::from_str::<Value>(&text) {
                     if let Some(files) = data["result"].as_array() {
+                        let api_endpoint = std::env::var("API_ENDPOINT")
+                            .expect("API_ENDPOINT env variable not set");
+                        let api_endpoint = api_endpoint.trim_end_matches('/');
                         let upload_commands: Vec<Value> = files.iter()
                             .filter_map(|file| file.as_str()) // Ensure the file is a string
                             .filter(|file| file.contains("/rlog")) // Filter files containing "/rlog"
@@ -64,7 +67,7 @@ async fn websocket_client_task(server_url: &str, dongle_id: &str, jwt: &str) {
                                     );
                                     json!({
                                         "fn": file_name,
-                                        "url": format!("http://154.38.175.6:3111/connectincoming/{dongle_id}/{}.bz2", url_file_format),
+                                        "url": format!("{api_endpoint}/connectincoming/{dongle_id}/{}.bz2", url_file_format),
                                         "headers": {}
                                     })
                                 })
@@ -103,11 +106,18 @@ impl Task for CollectData {
             detail: "Task generator".to_string(),
         }
     }
-    async fn run(&self, _app_context: &AppContext, _vars: &task::Vars) -> Result<()> {
+    async fn run(&self, _app_context: &AppContext, vars: &task::Vars) -> Result<()> {
         println!("Task CollectData generated");
-        let server_url = "ws://localhost:3111/ws/v2"; // WebSocket server URL
-        let dongle_id = "3b58edf884ab4eaf"; // Dongle ID to interact with
-        websocket_client_task(server_url, dongle_id, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6IkludGVybmFsIiwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjQzMjUzMiwiZXhwIjo1MzUyMn0.OM86mRxXCGFbHGMtmGIiYzWqd61nug4g-HH2ax8RiG8").await;
+        let ws_base = std::env::var("WS_ENDPOINT")
+            .unwrap_or_else(|_| "ws://localhost:3111/ws".to_string());
+        let server_url = format!("{}/v2", ws_base.trim_end_matches('/'));
+        let dongle_id = vars
+            .cli_arg("dongle_id")
+            .map(|s| s.to_string())
+            .or_else(|_| std::env::var("COLLECT_DATA_DONGLE_ID"))
+            .expect("Provide dongle_id CLI arg or COLLECT_DATA_DONGLE_ID env var");
+        let admin_jwt = std::env::var("ADMIN_JWT").expect("ADMIN_JWT env variable not set");
+        websocket_client_task(&server_url, &dongle_id, &admin_jwt).await;
         Ok(())
     }
 }

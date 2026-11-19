@@ -177,46 +177,54 @@ impl Hooks for App {
             https: (server_config.port + 111) as u16,
             binding: server_config.binding,
         };
-        //tokio::spawn(redirect_http_to_https(my_server_config.clone()));
-        // configure certificate and private key used by https
-        let config = RustlsConfig::from_pem_file(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("self_signed_certs")
-                .join("cert.pem"),
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("self_signed_certs")
-                .join("key.pem"),
-        )
-        .await
-        .unwrap();
-        // Clone the app for the HTTP server
-        let app_clone = app.clone();
-        // HTTPS Listener
-        let https_addr =
-            SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, my_server_config.https));
 
-        let https_server = tokio::spawn(async move {
-            axum_server::bind_rustls(https_addr, config)
-                .serve(app.into_make_service())
-                .await
-        });
+        let enable_tls = env::var("ENABLE_INTERNAL_TLS")
+            .map(|v| matches!(v.to_ascii_lowercase().as_str(), "true" | "1" | "yes"))
+            .unwrap_or(false);
 
-        // HTTP Listener
         let http_addr = SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, my_server_config.http));
 
-        let http_server = tokio::spawn(async move {
-            axum_server::bind(http_addr)
-                .serve(app_clone.into_make_service())
+        if enable_tls {
+            let cert_dir = env::var("TLS_CERT_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("self_signed_certs"));
+            let config = RustlsConfig::from_pem_file(
+                cert_dir.join("cert.pem"),
+                cert_dir.join("key.pem"),
+            )
+            .await
+            .expect("Failed to load internal TLS certs (set ENABLE_INTERNAL_TLS=false to disable)");
+
+            let app_clone = app.clone();
+            let https_addr =
+                SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, my_server_config.https));
+
+            tracing::info!("Binding HTTP on {} and HTTPS on {}", http_addr, https_addr);
+            let https_server = tokio::spawn(async move {
+                axum_server::bind_rustls(https_addr, config)
+                    .serve(app.into_make_service())
+                    .await
+            });
+            let http_server = tokio::spawn(async move {
+                axum_server::bind(http_addr)
+                    .serve(app_clone.into_make_service())
+                    .await
+            });
+
+            if let Err(e) = http_server.await {
+                eprintln!("HTTP server failed: {}", e);
+            }
+            if let Err(e) = https_server.await {
+                eprintln!("HTTPS server failed: {}", e);
+            }
+        } else {
+            tracing::info!("Binding HTTP on {} (internal TLS disabled)", http_addr);
+            if let Err(e) = axum_server::bind(http_addr)
+                .serve(app.into_make_service())
                 .await
-        });
-
-        // Await both servers separately
-        if let Err(e) = http_server.await {
-            eprintln!("HTTP server failed: {}", e);
-        }
-
-        if let Err(e) = https_server.await {
-            eprintln!("HTTPS server failed: {}", e);
+            {
+                eprintln!("HTTP server failed: {}", e);
+            }
         }
 
         Ok(())

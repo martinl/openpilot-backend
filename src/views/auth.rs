@@ -13,6 +13,7 @@ pub struct LoginResponse {
 #[derive(Serialize)]
 pub struct LoginTemplate {
     pub api_host: String,
+    pub github_oauth_url: String,
 }
 
 pub fn login(v: impl ViewRenderer, template: LoginTemplate) -> Result<impl IntoResponse> {
