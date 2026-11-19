@@ -80,7 +80,7 @@ jobs:
 
   clippy:
     name: Run Clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -102,6 +102,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             clang libclang-dev pkg-config libpq-dev libssl-dev \
             libavutil-dev libavformat-dev libavcodec-dev libavdevice-dev \
+            libavfilter-dev libswscale-dev libswresample-dev \
             capnproto
 
       - name: Install Rust toolchain
@@ -118,7 +119,7 @@ jobs:
 
   test:
     name: Run Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -164,6 +165,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             clang libclang-dev pkg-config libpq-dev libssl-dev \
             libavutil-dev libavformat-dev libavcodec-dev libavdevice-dev \
+            libavfilter-dev libswscale-dev libswresample-dev \
             capnproto ffmpeg
 
       - name: Install Rust toolchain

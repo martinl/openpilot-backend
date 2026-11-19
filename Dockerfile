@@ -21,6 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libavformat-dev \
     libavcodec-dev \
     libavdevice-dev \
+    libavfilter-dev \
+    libswscale-dev \
+    libswresample-dev \
     capnproto \
     git \
     ca-certificates \
