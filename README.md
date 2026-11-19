@@ -42,8 +42,10 @@ Tagging:
 
 ### 1. Submodules & Pre-commit
 ```bash
-git submodule sync --recursive
-git submodule update --init --recursive --depth 1 openpilot
+git submodule sync openpilot
+git submodule update --init --depth 1 openpilot
+git -C openpilot submodule sync opendbc_repo
+git -C openpilot submodule update --init --depth 1 opendbc_repo
 git submodule update --init --depth 1 frontend minikeyvalue
 
 # Optional local hooks (gitleaks, hadolint, rustfmt, yaml/CRLF checks)

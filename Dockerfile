@@ -31,10 +31,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /usr/src/connect
 
-# Copy manifests and openpilot schemas (including nested submodule targets)
+# Copy manifests and Cap'n Proto schemas (cereal + opendbc car.capnp target)
 COPY Cargo.toml Cargo.lock* ./
 COPY migration/Cargo.toml migration/Cargo.toml
-COPY openpilot/ openpilot/
+COPY openpilot/cereal openpilot/cereal
+COPY openpilot/opendbc_repo/opendbc/car openpilot/opendbc_repo/opendbc/car
 COPY src/build.rs src/build.rs
 
 # Copy full source and build release binary
