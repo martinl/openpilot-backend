@@ -76,7 +76,6 @@ pub struct MasterTemplate {
     pub cloudlogs: Option<CloudlogsTemplate>,
 }
 
-
 // Function to get the event type name as a string based on the WhichReader
 include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -91,7 +90,6 @@ static SEGMENT_FILE_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     let pattern = format!(r"(({DONGLE_ID})_({ROUTE_NAME})--({NUMBER})--({ALLOWED_FILENAME}$))");
     regex::Regex::new(&pattern).expect("segment file regex should compile")
 });
-
 
 pub async fn onebox_handler(
     auth: crate::middleware::auth::MyJWT,
@@ -130,7 +128,7 @@ pub async fn onebox_handler(
     let frontend_url: String = env::var("FRONTEND_URL")
         .ok()
         .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| "https://connect.apps.k8s.mlp.ee".to_string())
+        .unwrap_or_else(|| "http://localhost:3111".to_string())
         .trim_end_matches('/')
         .to_string();
 
@@ -326,7 +324,8 @@ pub async fn qlog_render(
     let mut reader = std::io::Cursor::new(decompressed_data);
     let reader_options = capnp::message::ReaderOptions::default();
 
-    let mut event_types: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
+    let mut event_types: std::collections::BTreeSet<&'static str> =
+        std::collections::BTreeSet::new();
     let mut unlog_data = Vec::new();
     let mut root_failures: usize = 0;
 
@@ -400,7 +399,7 @@ pub async fn login(
     let useradmin_host = env::var("USERADMIN_HOST")
         .ok()
         .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| "useradmin.apps.k8s.mlp.ee".to_string());
+        .unwrap_or_else(|| "localhost:3112".to_string());
     let redirect_uri = format!("{}/v2/auth/h/redirect/", api_host.trim_end_matches('/'));
     let state = format!("service,{useradmin_host}");
     let github_oauth_url = url::Url::parse_with_params(

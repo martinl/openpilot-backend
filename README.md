@@ -1,70 +1,72 @@
-This is an open-source alternative to openpilot connect for use with openpilot software.
-To see the server in action, go to: https://stable.konik.ai/
+# openpilot-backend
 
-Thank you https://konik.ai for hosting!
+Self-hosted, open-source backend for **openpilot Connect** and **Athena** (Rust / Loco.rs + PostgreSQL 18 + Valkey 9 + Connect SPA frontend).
 
-# To make your device connect to the server, complete the following steps:
-Note. There is no need to unpair the device from comma connect.
+Forked from `konik-ai/backend` and adapted for containerized / Kubernetes deployments behind an external TLS gateway.
 
-* Step 1: SSH into the device.
-* Step 2 (Cloned comma devices only): Make sure you generate unique OpenSSL key pairs on the device. You can copy a script from here https://github.com/1okko/openpilot/blob/mr.one/1.sh to generate the keys.
+---
 
-* Step 3: Delete the device dongle ID by running rm /data/params/d/DongleId and rm /persist/comma/dongle_id
+## Container Images (GHCR)
 
-If you are running a custom fork of openpilot that already has the code changes required, then you can reboot the device now and scan the qr code on the [website](https://stable.konik.ai/) pair the device.
+Built and published automatically by [.github/workflows/ci.yaml](.github/workflows/ci.yaml) after all lint, format, security audit, clippy, and unit/doc tests pass:
+- `ghcr.io/martinl/openpilot-backend/backend` ([Dockerfile](Dockerfile) — Rust `connect-cli`, `LOCO_ENV=useradmin`, port `3112`)
+- `ghcr.io/martinl/openpilot-backend/frontend` ([Dockerfile.frontend](Dockerfile.frontend) — `martinl/openpilot-frontend` SPA on `nginx:stable-alpine`, port `80`)
+- `ghcr.io/martinl/openpilot-backend/minikeyvalue` (`minikeyvalue/Dockerfile` — blob storage, ports `3000-3005`)
 
-If you are using a fork that does not have the code changes, you will need to continue with the following steps:
+Tagging:
+- Push to `master`/`main` → `:test` and `:sha-<short>`
+- Release tag `v*` → `:vX.Y.Z`, `:X.Y`, and `:latest`
 
-Step 4: export the server urls in launch_openpilot.sh by adding this to that file.
+---
+
+## Connecting an openpilot Device
+
+1. SSH into the device.
+2. *(Cloned devices only)* Ensure the device has a unique OpenSSL keypair.
+3. Clear the existing dongle ID:
+   ```bash
+   rm -f /data/params/d/DongleId /persist/comma/dongle_id
+   ```
+4. Export your server URLs in `launch_openpilot.sh`:
+   ```bash
+   #!/usr/bin/bash
+   export API_HOST=https://api.<your-domain>
+   export ATHENA_HOST=wss://athena.<your-domain>
+   exec ./launch_chffrplus.sh
+   ```
+5. Commit your change (`git commit -a -m "switch to custom connect backend"`), disable automatic updates if applicable, reboot, and scan the pairing QR code on `https://connect.<your-domain>`.
+
+---
+
+## Local Development & Container Builds
+
+### 1. Submodules & Pre-commit
 ```bash
-#!/usr/bin/bash
-export API_HOST=https://api.konik.ai
-export ATHENA_HOST=wss://athena.konik.ai
-# Any other custom launch options here
-exec ./launch_chffrplus.sh
+git submodule sync --recursive
+git submodule update --init --recursive --depth 1 openpilot
+git submodule update --init --depth 1 frontend minikeyvalue
+
+# Optional local hooks (gitleaks, hadolint, rustfmt, yaml/CRLF checks)
+brew install pre-commit hadolint
+pre-commit install
 ```
 
-Step 5: Commit your changes and disable automatic software updates in the openpilot settings (if applicable).
-```git commit -a -m "switched to konik server"```
+### 2. Environment Configuration
+Copy [.env_template](.env_template) to `.env` and fill in your endpoints, database credentials, and GitHub OAuth credentials.
 
-Step 5: Reboot the device and scan the QR code on the [website](https://stable.konik.com/). The QR code must be scanned with the konik website and not comma connect.
+### 3. Local Docker Builds
+```bash
+docker build -t openpilot-backend:local -f Dockerfile .
+docker build -t openpilot-frontend:local -f Dockerfile.frontend .
+docker build -t openpilot-minikeyvalue:local -f minikeyvalue/Dockerfile ./minikeyvalue
+```
 
-
-# Hosting you own instance (Hardcore)
-
-To get started with hosting your own instance, inspect the docker compose yaml to adjust the volume mount points.
-https://github.com/MoreTore/connect-killer/blob/4b9be8252688df5672448b1139da4b4a71c554dc/docker-compose.yml#L3-L53
-fill out the .env_template and rename it to .env
-https://github.com/MoreTore/connect-killer/blob/4b9be8252688df5672448b1139da4b4a71c554dc/.env_template#L1-L18
-create openssl keys for your domain and put them into self_signed_certs folder. See here https://github.com/MoreTore/connect-killer/blob/4b9be8252688df5672448b1139da4b4a71c554dc/src/app.rs#L151-L158
-More changes to hard coded values need to be changed to get the frontend working. More work needs to be done to make it easier.
-
-If large uploads to `/connectincoming/...` are failing mid-transfer (common when the API domain is proxied and has short request timeouts), set `UPLOAD_ENDPOINT` in `.env` to a DNS-only (non-proxied) origin hostname and leave `API_ENDPOINT` as-is.
-
-run docker compose up --build
-
-## SMART disk alerts on the host
-
-If you rely on the host's `smartmontools` service (outside Docker) you can keep the configuration under version control with the helper script in `scripts/smartd_mail.sh`. It wraps `/usr/sbin/sendmail` so that it can be referenced from `smartd.conf` without extra arguments (the `-M exec` directive only accepts a single path).
-
-1. Copy the script to your host and make it executable:
-   ```bash
-   sudo install -m 755 scripts/smartd_mail.sh /usr/local/bin/smartd_mail.sh
-   ```
-2. Configure `/etc/smartd.conf` to monitor every device and send alerts to `ryleymcc@shaw.ca`:
-   ```
-   DEFAULT -a -m ryleymcc@shaw.ca -M exec /usr/local/bin/smartd_mail.sh
-   DEVICESCAN -a -o on -S on -s (S/../.././02) -s (L/../../6/03)
-   ```
-   The `DEVICESCAN` line mirrors your current schedule (short self-test daily at 02:00 and long self-test every Saturday at 03:00). Adjust it if you need a different cadence.
-3. Reload the daemon so it picks up the syntax-safe configuration:
-   ```bash
-   sudo systemctl restart smartmontools.service
-   sudo systemctl status smartmontools.service --no-pager
-   ```
-4. Trigger a test email from smartd to verify delivery:
-   ```bash
-   sudo smartd -c /etc/smartd.conf -q onecheck -M test
-   ```
-
-Because the wrapper script handles the `sendmail -t -f ...` invocation, the systemd unit no longer crashes with the "unknown Directive" error and you still receive emails via `msmtp`/`sendmail`.
+### 4. Native Cargo Tests (macOS)
+`ffmpeg-sys-next 7.1.3` requires FFmpeg 6 (`avfft.h` was removed in FFmpeg 8):
+```bash
+rustup default 1.90.0
+brew install ffmpeg@6 pkg-config libpq capnp
+export PKG_CONFIG_PATH="/opt/homebrew/opt/ffmpeg@6/lib/pkgconfig:/opt/homebrew/opt/libpq/lib/pkgconfig"
+export RUST_MIN_STACK=134217728
+cargo test --lib
+```

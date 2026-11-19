@@ -48,9 +48,9 @@ server:
     cors:
       enable: true
       allow_origins:
-        - {{ get_env(name="FRONTEND_URL", default="https://connect.apps.k8s.mlp.ee") }}
-        - {{ get_env(name="USERADMIN_URL", default="https://useradmin.apps.k8s.mlp.ee") }}
-        - {{ get_env(name="API_ENDPOINT", default="https://api.apps.k8s.mlp.ee") }}
+        - {{ get_env(name="FRONTEND_URL", default="http://localhost:3111") }}
+        - {{ get_env(name="USERADMIN_URL", default="http://localhost:3112") }}
+        - {{ get_env(name="API_ENDPOINT", default="http://localhost:3112") }}
       allow_headers:
         - Authorization
         - Content-Type
@@ -154,4 +154,3 @@ auth:
     secret: {{get_env(name="SERVER_SECRET", default="4MqUawV3XQUNLNa575gC")}}
     # Token expiration time in seconds
     expiration: 7776000 # 90 days
-
