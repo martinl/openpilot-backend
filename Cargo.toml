@@ -60,7 +60,7 @@ http = "1.1.0"
 sha2 = "0.10.8"
 hmac = "0.12.1"
 hex = "0.4.3"
-thiserror = "1.0.60"
+thiserror = "2.0.21"
 image = "0.25.1"
 axum-server = { version = "0.7", features = ["tls-rustls"] }
 rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std"] }
