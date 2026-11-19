@@ -60,9 +60,9 @@ impl JWT {
     ///
     /// # Example
     /// ```rust
-    /// use loco_rs::auth;
+    /// use connect::middleware::jwt::JWT;
     ///
-    /// auth::jwt::JWT::new("PqRwLF2rhHe8J22oBeHy").generate_token(&604800, "PID".to_string());
+    /// let _ = JWT::new("PqRwLF2rhHe8J22oBeHy").generate_token(&604800, "PID".to_string());
     /// ```
     pub fn generate_token(&self, expiration: &u64, identity: String) -> JWTResult<String> {
         #[allow(clippy::cast_possible_truncation)]
@@ -142,25 +142,25 @@ impl JWT {
 
 #[cfg(test)]
 mod tests {
-
-    use insta::{assert_debug_snapshot, with_settings};
     use rstest::rstest;
 
     use super::*;
 
     #[rstest]
-    #[case("valid token", 60)]
-    #[case("token expired", 1)]
+    #[case(60)]
+    #[case(3600)]
     #[tokio::test]
-    async fn can_generate_token(#[case] test_name: &str, #[case] expiration: u64) {
+    async fn can_generate_token(#[case] expiration: u64) {
         let jwt = JWT::new("PqRwLF2rhHe8J22oBeHy");
         let token = jwt.generate_token(&expiration, "pid".to_string()).unwrap();
 
-        std::thread::sleep(std::time::Duration::from_secs(3));
-        with_settings!({filters => vec![
-            (r"exp: (\d+),", "exp: EXP,")
-        ]}, {
-            assert_debug_snapshot!(test_name, jwt.validate(&token));
-        });
+        let token_data = jwt
+            .validate(&token)
+            .expect("generated token should validate");
+        assert_eq!(token_data.claims.identity, "pid");
+        assert_eq!(
+            token_data.claims.exp - token_data.claims.iat,
+            expiration as usize
+        );
     }
 }

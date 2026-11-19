@@ -1,0 +1,4 @@
+failure-threshold: warning
+ignored:
+  # Do not pin Debian apt patch versions; older .deb revisions are pruned on security updates
+  - DL3008

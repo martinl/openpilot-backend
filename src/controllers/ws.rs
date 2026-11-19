@@ -189,32 +189,30 @@ async fn handle_jsonrpc_request(
         return Err(err);
     }
 
-    loop {
-        match time::timeout(Duration::from_secs(30), response_rx.recv()).await {
-            Ok(Some(mut response)) => {
-                // Convert response.id to a String for manipulation.
-                let mut response_id_string: String = response.id.into();
-                // If it ends with the appended now_id, remove that part.
-                if response_id_string.ends_with(&now_id) {
-                    let new_len = response_id_string.len() - now_id.len();
-                    response_id_string.truncate(new_len);
-                }
-                // Update response.id with the new value.
-                response.id = Id::String(response_id_string);
-                return Ok(format::json(response));
+    match time::timeout(Duration::from_secs(30), response_rx.recv()).await {
+        Ok(Some(mut response)) => {
+            // Convert response.id to a String for manipulation.
+            let mut response_id_string: String = response.id.into();
+            // If it ends with the appended now_id, remove that part.
+            if response_id_string.ends_with(&now_id) {
+                let new_len = response_id_string.len() - now_id.len();
+                response_id_string.truncate(new_len);
             }
-            Ok(None) => {
-                // Sender side disappeared before a response arrived.
-                let mut clients = manager.clients.lock().await;
-                clients.remove(&id_string);
-                return Err(Error::Timeout);
-            }
-            Err(_e) => {
-                // Remove client on timeout.
-                let mut clients = manager.clients.lock().await;
-                clients.remove(&id_string);
-                return Err(Error::Timeout);
-            }
+            // Update response.id with the new value.
+            response.id = Id::String(response_id_string);
+            Ok(format::json(response))
+        }
+        Ok(None) => {
+            // Sender side disappeared before a response arrived.
+            let mut clients = manager.clients.lock().await;
+            clients.remove(&id_string);
+            Err(Error::Timeout)
+        }
+        Err(_e) => {
+            // Remove client on timeout.
+            let mut clients = manager.clients.lock().await;
+            clients.remove(&id_string);
+            Err(Error::Timeout)
         }
     }
 }

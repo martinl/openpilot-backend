@@ -1,0 +1,42 @@
+# Install locally:
+#   brew install pre-commit   # or: pip install pre-commit
+#   pre-commit install
+#   pre-commit autoupdate
+
+exclude: ^(openpilot|frontend|minikeyvalue|capnproto-rust|my-comma-auth)/
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: detect-private-key
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+        # Exclude Loco Tera-templated config files ({{ get_env(...) }})
+        exclude: ^config/.*\.yaml$
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.15.1
+    hooks:
+      - id: hadolint
+        files: (^|/)Dockerfile(\..+)?$
+
+  - repo: local
+    hooks:
+      - id: rustfmt
+        name: rustfmt
+        entry: rustfmt --edition 2021
+        language: system
+        types: [rust]
