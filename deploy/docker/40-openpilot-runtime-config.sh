@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-API_HOST="${API_ENDPOINT:-https://api.apps.k8s.mlp.ee}"
-ATHENA_HOST="${ATHENA_ENDPOINT:-https://athena.apps.k8s.mlp.ee}"
+API_HOST="${API_ENDPOINT:-http://localhost:3112}"
+ATHENA_HOST="${ATHENA_ENDPOINT:-http://localhost:3112}"
 ATHENA_WS_HOST="$(printf '%s' "${ATHENA_HOST}" | sed 's|^https://|wss://|; s|^http://|ws://|')"
 GITHUB_CLIENT_ID="${GITHUB_CLIENT:-}"
 
