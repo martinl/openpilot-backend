@@ -60,9 +60,9 @@ impl JWT {
     ///
     /// # Example
     /// ```rust
-    /// use loco_rs::auth;
+    /// use connect::middleware::jwt::JWT;
     ///
-    /// auth::jwt::JWT::new("PqRwLF2rhHe8J22oBeHy").generate_token(&604800, "PID".to_string());
+    /// let _ = JWT::new("PqRwLF2rhHe8J22oBeHy").generate_token(&604800, "PID".to_string());
     /// ```
     pub fn generate_token(&self, expiration: &u64, identity: String) -> JWTResult<String> {
         #[allow(clippy::cast_possible_truncation)]

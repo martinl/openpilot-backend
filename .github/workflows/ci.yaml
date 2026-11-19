@@ -143,49 +143,10 @@ jobs:
       - name: Audit Rust dependencies
         run: cargo audit
 
-  clippy:
-    name: Run Clippy
+  check-and-test:
+    name: Clippy & Tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Shallow checkout openpilot submodule (cereal schemas)
-        run: |
-          git submodule sync --recursive openpilot
-          git submodule update --init --recursive --depth 1 openpilot
-
-      - name: Install native build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            clang libclang-dev pkg-config libpq-dev libssl-dev \
-            libavutil-dev libavformat-dev libavcodec-dev libavdevice-dev \
-            libavfilter-dev libswscale-dev libswresample-dev \
-            capnproto
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          components: clippy
-
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Run cargo clippy
-        run: cargo clippy --all-features
-
-  test:
-    name: Run Tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     permissions:
       contents: read
 
@@ -237,9 +198,13 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo clippy
+        run: cargo clippy --all-features
 
       - name: Run cargo test
         run: cargo test --all-features --all
@@ -252,7 +217,7 @@ jobs:
   # ===========================================================================
   build-backend:
     name: Build & Push Backend Image
-    needs: [lint, rustfmt, audit, clippy, test]
+    needs: [lint, rustfmt, audit, check-and-test]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -322,7 +287,7 @@ jobs:
 
   build-frontend:
     name: Build & Push Frontend Image
-    needs: [lint, rustfmt, audit, clippy, test]
+    needs: [lint, rustfmt, audit, check-and-test]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -390,7 +355,7 @@ jobs:
 
   build-minikeyvalue:
     name: Build & Push MiniKeyValue Image
-    needs: [lint, rustfmt, audit, clippy, test]
+    needs: [lint, rustfmt, audit, check-and-test]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
