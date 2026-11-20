@@ -64,11 +64,8 @@ docker build -t openpilot-minikeyvalue:local -f minikeyvalue/Dockerfile ./minike
 ```
 
 ### 4. Native Cargo Tests (macOS)
-`ffmpeg-sys-next 7.1.3` requires FFmpeg 6 (`avfft.h` was removed in FFmpeg 8):
 ```bash
 rustup default 1.90.0
-brew install ffmpeg@6 pkg-config libpq capnp
-export PKG_CONFIG_PATH="/opt/homebrew/opt/ffmpeg@6/lib/pkgconfig:/opt/homebrew/opt/libpq/lib/pkgconfig"
-export RUST_MIN_STACK=134217728
-cargo test --lib
+brew install pkg-config libpq capnp ffmpeg
+RUST_MIN_STACK=134217728 cargo test --lib
 ```

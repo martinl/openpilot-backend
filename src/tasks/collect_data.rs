@@ -1,4 +1,4 @@
-use loco_rs::prelude::*;
+use crate::loco_rs::prelude::*;
 
 use futures_util::{SinkExt, StreamExt};
 use http::Request;
@@ -108,8 +108,8 @@ impl Task for CollectData {
     }
     async fn run(&self, _app_context: &AppContext, vars: &task::Vars) -> Result<()> {
         println!("Task CollectData generated");
-        let ws_base = std::env::var("WS_ENDPOINT")
-            .unwrap_or_else(|_| "ws://localhost:3111/ws".to_string());
+        let ws_base =
+            std::env::var("WS_ENDPOINT").unwrap_or_else(|_| "ws://localhost:3111/ws".to_string());
         let server_url = format!("{}/v2", ws_base.trim_end_matches('/'));
         let dongle_id = vars
             .cli_arg("dongle_id")

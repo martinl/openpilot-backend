@@ -1,7 +1,7 @@
+use crate::loco_rs::prelude::*;
 use async_compression::tokio::bufread;
 use capnp::message::ReaderOptions;
 use futures::stream::TryStreamExt;
-use loco_rs::prelude::*;
 use once_cell::sync::Lazy;
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
@@ -9,18 +9,18 @@ use std::{
     collections::HashMap,
     env,
     io::{self, Cursor},
-    sync::{Arc},
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tempfile::NamedTempFile;
 use tokio::{
-    io::{AsyncReadExt},
+    io::AsyncReadExt,
     sync::{Mutex, Notify},
 };
 use tokio_util::io::StreamReader;
 
-use crate::cereal::log_capnp::event as LogEvent;
 use crate::cereal::log_capnp;
+use crate::cereal::log_capnp::event as LogEvent;
 use crate::common;
 use crate::common::ffmpeg::probe_duration_seconds;
 use crate::models::_entities::{devices, routes, segments};
@@ -123,10 +123,7 @@ impl LockManager {
     }
 }
 
-async fn device_exists(
-    db: &DatabaseConnection,
-    dongle_id: &str,
-) -> bool {
+async fn device_exists(db: &DatabaseConnection, dongle_id: &str) -> bool {
     match devices::Model::find_device(db, dongle_id).await {
         Ok(_) => true,
         Err(ModelError::EntityNotFound) => {
@@ -173,8 +170,8 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let api_endpoint: String =
             env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
 
-        if !device_exists(&self.ctx.db, &args.dongle_id).await { 
-            return Ok(()); 
+        if !device_exists(&self.ctx.db, &args.dongle_id).await {
+            return Ok(());
         }
 
         let canonical_route_name = format!("{}|{}", args.dongle_id, args.timestamp);
@@ -874,10 +871,8 @@ async fn parse_qlog(
                                 }
                             }
                         }
-
                     }
-                    LogEvent::OnroadEvents(_onroad_event) => {
-                    }
+                    LogEvent::OnroadEvents(_onroad_event) => {}
                     LogEvent::SelfdriveState(selfdrive_state) => {
                         if let Ok(selfdrive_state) = selfdrive_state {
                             // Track the engagement state and alert status from SelfdriveState
@@ -991,9 +986,9 @@ async fn parse_qlog(
     } else {
         Some(
             tokio::task::spawn_blocking(move || {
-                use image::{GenericImage, ImageBuffer, Rgba};
                 use image::codecs::jpeg::JpegEncoder;
                 use image::imageops::FilterType;
+                use image::{GenericImage, ImageBuffer, Rgba};
 
                 const TILE_WIDTH: u32 = 128;
                 const TILE_HEIGHT: u32 = 80;
@@ -1001,8 +996,8 @@ async fn parse_qlog(
                 let downscaled: Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> = thumbnails
                     .iter()
                     .map(|image_data| {
-                        let img = image::load_from_memory(image_data)
-                            .expect("Failed to load image");
+                        let img =
+                            image::load_from_memory(image_data).expect("Failed to load image");
                         img.resize_exact(TILE_WIDTH, TILE_HEIGHT, FilterType::Lanczos3)
                             .to_rgba8()
                     })
@@ -1013,7 +1008,9 @@ async fn parse_qlog(
 
                 for (i, thumbnail) in downscaled.iter().enumerate() {
                     let x = i as u32 * TILE_WIDTH;
-                    stitched.copy_from(thumbnail, x, 0).expect("copy_from failed");
+                    stitched
+                        .copy_from(thumbnail, x, 0)
+                        .expect("copy_from failed");
                 }
 
                 let mut bytes = Vec::new();

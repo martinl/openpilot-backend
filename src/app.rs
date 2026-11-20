@@ -1,7 +1,4 @@
-use async_trait::async_trait;
-use axum::Extension;
-use axum_server::tls_rustls::RustlsConfig;
-use loco_rs::{
+use crate::loco_rs::{
     app::{AppContext, Hooks, Initializer},
     boot::{create_app, BootResult, StartMode},
     controller::AppRoutes,
@@ -12,6 +9,9 @@ use loco_rs::{
     worker::{AppWorker, Processor},
     Result,
 };
+use async_trait::async_trait;
+use axum::Extension;
+use axum_server::tls_rustls::RustlsConfig;
 use migration::Migrator;
 use reqwest::Client;
 use sea_orm::DatabaseConnection;
@@ -63,7 +63,7 @@ impl Hooks for App {
     }
 
     fn routes(ctx: &AppContext) -> AppRoutes {
-        if ctx.environment == loco_rs::environment::Environment::Any("connect".to_string()) { 
+        if ctx.environment == crate::loco_rs::environment::Environment::Any("connect".to_string()) {
             return AppRoutes::with_default_routes();
         }
         AppRoutes::with_default_routes()
@@ -79,11 +79,15 @@ impl Hooks for App {
     }
 
     fn connect_workers<'a>(p: &'a mut Processor, ctx: &'a AppContext) {
-        if ctx.environment == loco_rs::environment::Environment::Any("connect".to_string()) {
+        if ctx.environment == crate::loco_rs::environment::Environment::Any("connect".to_string()) {
             return;
         }
-        p.register(crate::workers::bootlog_parser::BootlogParserWorker::build(ctx));
-        p.register(crate::workers::jpg_extractor::JpgExtractorWorker::build(ctx));
+        p.register(crate::workers::bootlog_parser::BootlogParserWorker::build(
+            ctx,
+        ));
+        p.register(crate::workers::jpg_extractor::JpgExtractorWorker::build(
+            ctx,
+        ));
         p.register(crate::workers::log_parser::LogSegmentWorker::build(ctx));
     }
 
@@ -121,8 +125,8 @@ impl Hooks for App {
     async fn after_routes(router: axum::Router, ctx: &AppContext) -> Result<axum::Router> {
         let router = NormalizePathLayer::trim_trailing_slash().layer(router);
         let router = axum::Router::new().nest_service("", router);
-        
-        if ctx.environment == loco_rs::environment::Environment::Any("connect".to_string()) {
+
+        if ctx.environment == crate::loco_rs::environment::Environment::Any("connect".to_string()) {
             return Ok(router);
         }
 
@@ -138,7 +142,11 @@ impl Hooks for App {
             let mut interval = time::interval(time::Duration::from_secs(10)); // Ping every 10 seconds
             loop {
                 interval.tick().await;
-                crate::controllers::ws::send_ping_to_all_devices(ping_manager.clone(), &db_clone.clone()).await;
+                crate::controllers::ws::send_ping_to_all_devices(
+                    ping_manager.clone(),
+                    &db_clone.clone(),
+                )
+                .await;
             }
         });
 
@@ -171,7 +179,10 @@ impl Hooks for App {
         Ok(router)
     }
 
-    async fn serve(app: axum::Router, server_config: loco_rs::boot::ServeParams) -> Result<()> {
+    async fn serve(
+        app: axum::Router,
+        server_config: crate::loco_rs::boot::ServeParams,
+    ) -> Result<()> {
         let my_server_config = MyServerConfig {
             http: server_config.port as u16,
             https: (server_config.port + 111) as u16,
@@ -187,7 +198,9 @@ impl Hooks for App {
         if enable_tls {
             let cert_dir = env::var("TLS_CERT_DIR")
                 .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("self_signed_certs"));
+                .unwrap_or_else(|_| {
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("self_signed_certs")
+                });
             let config = RustlsConfig::from_pem_file(
                 cert_dir.join("cert.pem"),
                 cert_dir.join("key.pem"),
@@ -236,7 +249,7 @@ impl Hooks for App {
 struct MyServerConfig {
     http: u16,
     https: u16,
-    binding: String
+    binding: String,
 }
 
 /*
@@ -267,7 +280,7 @@ async fn redirect_http_to_https(my_server_config: MyServerConfig) {
         }
     };
 
-    
+
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", my_server_config.binding, my_server_config.http)).await.unwrap();
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, redirect.into_make_service())

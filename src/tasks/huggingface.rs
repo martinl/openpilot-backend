@@ -1,4 +1,4 @@
-use loco_rs::prelude::*;
+use crate::loco_rs::prelude::*;
 
 pub struct Huggingface;
 #[async_trait]

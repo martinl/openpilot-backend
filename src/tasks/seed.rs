@@ -13,7 +13,7 @@
 //! ```sh
 //! cargo run task seed_data refresh:true
 //! ```
-use loco_rs::{db, prelude::*};
+use crate::loco_rs::{db, prelude::*};
 use migration::Migrator;
 
 use crate::app::App;

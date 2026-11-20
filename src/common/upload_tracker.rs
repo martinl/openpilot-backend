@@ -177,4 +177,3 @@ impl Drop for ActiveUploadGuard {
         self.tracker.finish(&self.id);
     }
 }
-

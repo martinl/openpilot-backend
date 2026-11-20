@@ -1,5 +1,5 @@
 pub use super::_entities::authorized_users::{self, ActiveModel, Column, Entity, Model};
-use loco_rs::prelude::*;
+use crate::loco_rs::prelude::*;
 use sea_orm::entity::prelude::*;
 use sea_orm::DeleteResult;
 use serde::{Deserialize, Serialize};

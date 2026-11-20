@@ -47,8 +47,8 @@ pub fn increment_param_value(param_name: &str, value: &str) {
 }
 
 pub async fn persist_param_value_counts(
-    storage: &loco_rs::storage::Storage,
-) -> loco_rs::storage::StorageResult<()> {
+    storage: &crate::loco_rs::storage::Storage,
+) -> crate::loco_rs::storage::StorageResult<()> {
     use futures::future::try_join_all;
 
     let mut tasks = Vec::new();
@@ -89,7 +89,7 @@ pub async fn persist_param_value_counts(
             // Write back
             let data = serde_json::to_vec(&ValueCounts(merged.clone())).unwrap();
             storage.upload(path, &Bytes::from(data)).await?;
-            Ok::<(), loco_rs::storage::StorageError>(())
+            Ok::<(), crate::loco_rs::storage::StorageError>(())
         });
     }
 
@@ -110,8 +110,8 @@ pub fn save_device_param(device_id: &str, param_name: &str, value: &str) {
 }
 
 pub async fn persist_device_params(
-    storage: &loco_rs::storage::Storage,
-) -> loco_rs::storage::StorageResult<()> {
+    storage: &crate::loco_rs::storage::Storage,
+) -> crate::loco_rs::storage::StorageResult<()> {
     use bytes::Bytes;
     use futures::future::try_join_all;
     use std::collections::HashMap;
@@ -130,7 +130,7 @@ pub async fn persist_device_params(
             let path = Path::new(&file_path);
             let data = serde_json::to_vec_pretty(&param_map).unwrap();
             storage.upload(path, &Bytes::from(data)).await?;
-            Ok::<(), loco_rs::storage::StorageError>(())
+            Ok::<(), crate::loco_rs::storage::StorageError>(())
         });
     }
     try_join_all(tasks).await?;

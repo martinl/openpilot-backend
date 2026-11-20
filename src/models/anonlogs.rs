@@ -1,5 +1,5 @@
 use super::_entities::anonlogs::{ActiveModel, Model};
-use loco_rs::prelude::*;
+use crate::loco_rs::prelude::*;
 use sea_orm::entity::prelude::*;
 
 use chrono::prelude::Utc;

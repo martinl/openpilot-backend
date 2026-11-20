@@ -1,29 +1,18 @@
 # syntax=docker/dockerfile:1.7
 
 # =============================================================================
-# Stage 1: Build connect-cli (Rust + Cap'n Proto + FFmpeg dev libs)
+# Stage 1: Build connect-cli (Rust + Cap'n Proto)
 # =============================================================================
 FROM rust:1.90-bookworm AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV CC=clang
-ENV CXX=clang++
 ENV RUST_MIN_STACK=134217728
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    clang \
-    libclang-dev \
     pkg-config \
     libpq-dev \
     libssl-dev \
-    libavutil-dev \
-    libavformat-dev \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavfilter-dev \
-    libswscale-dev \
-    libswresample-dev \
     capnproto \
     git \
     ca-certificates \
@@ -66,10 +55,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libpq5 \
     libssl3 \
-    libavutil57 \
-    libavformat59 \
-    libavcodec59 \
-    libavdevice59 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 1000 -r openpilot && useradd -u 1000 -r -g openpilot -m openpilot \
     && mkdir -p /app /params && chown -R 1000:1000 /app /params

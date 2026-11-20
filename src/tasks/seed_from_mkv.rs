@@ -3,6 +3,7 @@ use rand::seq::SliceRandom;
 use rand::SeedableRng;
 // For the `shuffle` method
 use crate::common::re::*;
+use crate::loco_rs::prelude::*;
 use crate::{
     common,
     workers::{
@@ -11,7 +12,6 @@ use crate::{
     },
 };
 use indicatif::{ProgressBar, ProgressStyle};
-use loco_rs::prelude::*;
 use reqwest::Client;
 use serde_json::{from_str, Value};
 use std::thread;

@@ -1,6 +1,6 @@
 pub use super::_entities::bootlogs::{self, ActiveModel, Column, Entity, Model as BM};
+use crate::loco_rs::model::ModelResult;
 use chrono::prelude::Utc;
-use loco_rs::model::ModelResult;
 use sea_orm::{entity::prelude::*, ActiveValue, TransactionTrait};
 
 #[async_trait::async_trait]

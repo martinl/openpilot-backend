@@ -1,4 +1,4 @@
-use loco_rs::prelude::*;
+use crate::loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 
 pub struct JpgExtractorWorker {

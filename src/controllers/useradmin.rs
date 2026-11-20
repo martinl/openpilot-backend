@@ -1,10 +1,10 @@
 #![allow(clippy::unused_async)]
+use crate::loco_rs::prelude::*;
 use async_compression::tokio::bufread;
 use axum::{
     extract::{Query, State},
     Extension,
 };
-use loco_rs::prelude::*;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

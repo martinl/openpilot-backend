@@ -1,28 +1,26 @@
 #![allow(clippy::unused_async)]
-use std::{collections::HashMap, sync::Arc};
-use std::io::Write;
+use crate::loco_rs::prelude::*;
 use crate::{
-    common::{mkv_helpers, re::*, ffmpeg::*},
+    common::{ffmpeg::*, mkv_helpers, re::*},
     enforce_ownership_rule,
     models::{devices::DM, routes::RM},
 };
 use axum::{
     body::Body,
-    extract::{Path, Query, State, Extension},
+    extract::{Extension, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
 };
-use loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_json::Value as JsonValue;
+use std::io::Write;
+use std::{collections::HashMap, sync::Arc};
 
-use tempfile::NamedTempFile;
-use std::{
-    path::PathBuf
-};
 use futures_util::StreamExt;
+use std::path::PathBuf;
+use tempfile::NamedTempFile;
 
 use super::ws::ConnectionManager;
 use chrono::{Datelike, TimeZone, Timelike, Utc};
@@ -341,10 +339,9 @@ async fn delete_route(
             .to_string(); // Convert to string for independent ownership
         let file_url = mkv_helpers::get_mkv_file_url(&file_name);
 
-        let _ =
-            client.delete(&file_url).send().await.map_err(|e| {
-                return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
-            });
+        let _ = client.delete(&file_url).send().await.map_err(|e| {
+            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+        });
     }
 
     return Ok((StatusCode::OK, format!("Deleted {} files", keys.len())).into_response());
@@ -399,10 +396,9 @@ async fn delete_data(
             .to_string(); // Convert to string for independent ownership
         let file_url = mkv_helpers::get_mkv_file_url(&file_name);
 
-        let _ =
-            client.delete(&file_url).send().await.map_err(|e| {
-                return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
-            });
+        let _ = client.delete(&file_url).send().await.map_err(|e| {
+            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+        });
     }
     // We cant delete the device model but we still want to delete all the routes and segments. We want to keep the device in the db so it can
     // be used for the new customer that pairs the device.
@@ -828,7 +824,11 @@ pub async fn download_stitched_video(
 
     let fullname = format!("{dongle_id}|{route_name}");
     let owner = is_owner(&auth, &ctx.db, &dongle_id).await;
-    let superuser = auth.user_model.as_ref().map(|u| u.superuser).unwrap_or(false);
+    let superuser = auth
+        .user_model
+        .as_ref()
+        .map(|u| u.superuser)
+        .unwrap_or(false);
     let public = RM::is_public(&ctx.db, &fullname).await.unwrap_or(false);
     if !public && !owner && !superuser {
         return Err((StatusCode::UNAUTHORIZED, "Not authorized"));
@@ -879,8 +879,12 @@ pub async fn download_stitched_video(
     }
 
     // 1) Download all segment bytes into one temp .hevc file
-    let mut input_temp = NamedTempFile::with_suffix(".hevc")
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create temp input"))?;
+    let mut input_temp = NamedTempFile::with_suffix(".hevc").map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to create temp input",
+        )
+    })?;
 
     for (_, key) in &segments {
         let url = mkv_helpers::get_mkv_file_url(key);
@@ -897,29 +901,43 @@ pub async fn download_stitched_video(
         let mut stream = resp.bytes_stream();
         while let Some(chunk) = stream.next().await {
             let bytes = chunk.map_err(|_| (StatusCode::BAD_GATEWAY, "Failed reading segment"))?;
-            input_temp
-                .write_all(&bytes)
-                .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed writing temp input"))?;
+            input_temp.write_all(&bytes).map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed writing temp input",
+                )
+            })?;
         }
     }
 
-    input_temp
-        .flush()
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed flushing temp input"))?;
+    input_temp.flush().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed flushing temp input",
+        )
+    })?;
 
-    let input_path: PathBuf = input_temp
-        .into_temp_path()
-        .keep()
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to persist temp input"))?;
+    let input_path: PathBuf = input_temp.into_temp_path().keep().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to persist temp input",
+        )
+    })?;
 
     // Create output temp path in two steps because keep() has a different error type.
-    let output_temp = NamedTempFile::with_suffix(".mp4")
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create temp output"))?;
+    let output_temp = NamedTempFile::with_suffix(".mp4").map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to create temp output",
+        )
+    })?;
 
-    let output_path: PathBuf = output_temp
-        .into_temp_path()
-        .keep()
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to persist temp output"))?;
+    let output_path: PathBuf = output_temp.into_temp_path().keep().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to persist temp output",
+        )
+    })?;
 
     // 2) Convert with ffmpeg CLI in a blocking thread
     let input_path_for_task = input_path.clone();
@@ -936,13 +954,21 @@ pub async fn download_stitched_video(
     })?;
 
     // 3) Stream the finished MP4 back
-    let file = tokio::fs::File::open(&output_path)
-        .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to open output video"))?;
+    let file = tokio::fs::File::open(&output_path).await.map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to open output video",
+        )
+    })?;
     let file_size = file
         .metadata()
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to stat output video"))?
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to stat output video",
+            )
+        })?
         .len();
 
     let stream = tokio_util::io::ReaderStream::new(file);
@@ -966,7 +992,12 @@ pub async fn download_stitched_video(
             format!("attachment; filename=\"{filename}\""),
         )
         .body(body)
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to build response"))
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to build response",
+            )
+        })
 }
 
 // List top-level keys (sorted, paginated) with auth and pattern check
