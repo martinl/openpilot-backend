@@ -3,7 +3,7 @@
 # =============================================================================
 # Stage 1: Build connect-cli (Rust + Cap'n Proto)
 # =============================================================================
-FROM rust:1.90-bookworm AS builder
+FROM rust:1.100-bookworm AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV RUST_MIN_STACK=134217728
@@ -11,7 +11,6 @@ ENV RUST_MIN_STACK=134217728
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     pkg-config \
-    libpq-dev \
     libssl-dev \
     capnproto \
     git \
@@ -53,7 +52,6 @@ ENV ENABLE_INTERNAL_TLS=false
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     ffmpeg \
-    libpq5 \
     libssl3 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 1000 -r openpilot && useradd -u 1000 -r -g openpilot -m openpilot \

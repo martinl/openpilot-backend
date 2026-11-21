@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  RUST_TOOLCHAIN: "1.90.0"
+  RUST_TOOLCHAIN: "1.100.0"
   RUST_MIN_STACK: "134217728"
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository }}
