@@ -252,6 +252,30 @@ struct MyServerConfig {
     binding: String,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_controller_routes_register_cleanly() {
+        let mut router = axum::Router::new();
+        for routes in [
+            controllers::ws::routes(),
+            controllers::v2::routes(),
+            controllers::useradmin::routes(),
+            controllers::connectincomming::routes(),
+            controllers::connectdata::routes(),
+            controllers::v1::routes(),
+            controllers::maps::routes(),
+            controllers::params::routes(),
+            controllers::stats::routes(),
+        ] {
+            router = router.merge(routes.into_router());
+        }
+        let _ = router;
+    }
+}
+
 /*
 async fn redirect_http_to_https(my_server_config: MyServerConfig) {
     let config_clone = my_server_config.clone(); // Clone the config for the closure

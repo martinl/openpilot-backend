@@ -145,16 +145,7 @@ async fn decode_pair_token(
     ctx: &AppContext,
     jwt: &str,
 ) -> Result<DevicePairClaims, jsonwebtoken::errors::Error> {
-    let mut validation = Validation::new(Algorithm::RS256); //alg should not matter here
-    validation.insecure_disable_signature_validation();
-    let token_data = match decode::<DevicePairClaims>(
-        jwt,
-        &DecodingKey::from_secret(&"na".as_bytes()),
-        &validation,
-    ) {
-        Ok(token_data) => token_data,
-        Err(e) => return Err(e),
-    };
+    let token_data = jsonwebtoken::dangerous::insecure_decode::<DevicePairClaims>(jwt)?;
 
     let device = match DM::find_device(&ctx.db, &token_data.claims.identity).await {
         Ok(device) => device,

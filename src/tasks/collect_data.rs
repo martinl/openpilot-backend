@@ -36,7 +36,7 @@ async fn websocket_client_task(server_url: &str, dongle_id: &str, jwt: &str) {
         "id": id
     })
     .to_string();
-    if let Err(e) = ws_stream.send(Message::Text(list_command)).await {
+    if let Err(e) = ws_stream.send(Message::Text(list_command.into())).await {
         eprintln!("Failed to send message: {:?}", e);
         return;
     }
@@ -82,7 +82,7 @@ async fn websocket_client_task(server_url: &str, dongle_id: &str, jwt: &str) {
                         })
                         .to_string();
                         ws_stream
-                            .send(Message::Text(upload_message))
+                            .send(Message::Text(upload_message.into()))
                             .await
                             .expect("Failed to send upload command");
                     }

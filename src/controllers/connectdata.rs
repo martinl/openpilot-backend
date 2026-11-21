@@ -1057,32 +1057,32 @@ pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectdata")
         .add(
-            "/:dongle_id/:timestamp/:segment/coords.json",
+            "/{dongle_id}/{timestamp}/{segment}/coords.json",
             get(coords_download),
         )
         .add(
-            "/:dongle_id/:timestamp/:segment/events.json",
+            "/{dongle_id}/{timestamp}/{segment}/events.json",
             get(events_download),
         )
         .add(
-            "/:dongle_id/:timestamp/:segment/sprite.jpg",
+            "/{dongle_id}/{timestamp}/{segment}/sprite.jpg",
             get(sprite_download),
         )
         .add(
-            "/:dongle_id/:timestamp/:segment/:file",
+            "/{dongle_id}/{timestamp}/{segment}/{file}",
             get(auth_file_download),
         )
         .add(
-            "/:filetype/:dongle_id/:timestamp/:segment/:file",
+            "/{filetype}/{dongle_id}/{timestamp}/{segment}/{file}",
             get(depreciated_auth_file_download),
         )
-        .add("/delete/:dongle_id", delete(delete_data))
-        .add("/delete/:dongle_id/:timestamp", delete(delete_route))
+        .add("/delete/{dongle_id}", delete(delete_data))
+        .add("/delete/{dongle_id}/{timestamp}", delete(delete_route))
         .add(
-            "/download/:dongle_id/:timestamp/:file_type",
+            "/download/{dongle_id}/{timestamp}/{file_type}",
             get(download_stitched_video),
         )
-        .add("/bootlog/:bootlog_file", get(bootlog_file_download))
-        .add("/:dongle_id/cloudlogs", get(get_cloudlog_cache))
+        .add("/bootlog/{bootlog_file}", get(bootlog_file_download))
+        .add("/{dongle_id}/cloudlogs", get(get_cloudlog_cache))
         .add("/cloudlogs/all", get(get_all_cloudlogs))
 }
