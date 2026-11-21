@@ -733,7 +733,7 @@ pub mod boot {
     pub async fn create_context<H: app::Hooks, M: MigratorTrait>(
         environment: &environment::Environment,
     ) -> Result<app::AppContext> {
-        let _ = dotenv::dotenv();
+        let _ = dotenvy::dotenv();
         let config = config::Config::from_env(environment);
         let db_uri = env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgres://loco:loco@localhost:5432/connect_development".into());
@@ -846,7 +846,7 @@ pub mod cli {
     }
 
     pub async fn main<H: Hooks, M: MigratorTrait>() -> Result<()> {
-        let _ = dotenv::dotenv();
+        let _ = dotenvy::dotenv();
         init_tracing();
 
         let args: Vec<String> = std::env::args().skip(1).collect();
