@@ -457,3 +457,54 @@ pub fn routes() -> Routes {
         .add("/qlog", get(qlog_render))
         .add("/auth/logout", get(logout))
 }
+
+#[cfg(test)]
+mod tests {
+    use serial_test::serial;
+
+    use super::*;
+
+    #[tokio::test]
+    #[serial]
+    async fn logout_clears_configured_cookie_and_redirects_to_login() {
+        let prev_name = env::var("COOKIE_NAME").ok();
+        let prev_domain = env::var("COOKIE_DOMAIN").ok();
+
+        env::set_var("COOKIE_NAME", "jwt_test");
+        env::set_var("COOKIE_DOMAIN", ".muuga.casa");
+        let resp = logout().await.into_response();
+        assert_eq!(resp.status(), StatusCode::FOUND);
+        assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/login");
+        let cookie_hdr = resp
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(cookie_hdr.starts_with("jwt_test=; Domain=.muuga.casa;"));
+        assert!(cookie_hdr.contains("Max-Age=0"));
+        assert!(cookie_hdr.contains("HttpOnly"));
+        assert!(cookie_hdr.contains("Secure"));
+
+        env::remove_var("COOKIE_NAME");
+        env::remove_var("COOKIE_DOMAIN");
+        let resp_default = logout().await.into_response();
+        let cookie_default = resp_default
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(cookie_default.starts_with("jwt=; Path=/;"));
+        assert!(!cookie_default.contains("Domain="));
+
+        match prev_name {
+            Some(v) => env::set_var("COOKIE_NAME", v),
+            None => env::remove_var("COOKIE_NAME"),
+        }
+        match prev_domain {
+            Some(v) => env::set_var("COOKIE_DOMAIN", v),
+            None => env::remove_var("COOKIE_DOMAIN"),
+        }
+    }
+}

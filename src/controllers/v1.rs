@@ -1602,3 +1602,79 @@ pub fn routes() -> Routes {
         .add("/navigation/{dongle_id}/favorite", post(set_nav_favorite))
         .add("/iceservers", get(get_ice_servers))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transform_route_string_handles_drive_crash_boot_and_unknown_formats() {
+        assert_eq!(
+            transform_route_string("2024-03-02--19-02-46--0--rlog.bz2"),
+            "2024-03-02--19-02-46/0/rlog.bz2"
+        );
+        assert_eq!(
+            transform_route_string("0000008c--8a84371aea--12/qcamera.ts"),
+            "0000008c--8a84371aea/12/qcamera.ts"
+        );
+        assert_eq!(
+            transform_route_string("crash/0000008c--8a84371aea_deadbeef_crash.log"),
+            "crash/0000008c--8a84371aea/deadbeef/crash.log"
+        );
+        assert_eq!(
+            transform_route_string("boot/2024-03-02--19-02-46.bz2"),
+            "boot/2024-03-02--19-02-46.bz2"
+        );
+        assert_eq!(transform_route_string("unrecognized/path"), "Invalid");
+    }
+
+    #[tokio::test]
+    async fn sort_keys_to_response_buckets_media_and_log_urls() {
+        let keys = vec![
+            "https://api/fcamera.hevc".into(),
+            "https://api/dcamera.hevc".into(),
+            "https://api/qcamera.ts".into(),
+            "https://api/ecameras.hevc".into(),
+            "https://api/qlog.zst".into(),
+            "https://api/rlog.bz2".into(),
+            "https://api/ignored.txt".into(),
+        ];
+        let res = sort_keys_to_response(keys).await;
+        assert_eq!(res.cameras, vec!["https://api/fcamera.hevc"]);
+        assert_eq!(res.dcameras, vec!["https://api/dcamera.hevc"]);
+        assert_eq!(res.qcameras, vec!["https://api/qcamera.ts"]);
+        assert_eq!(res.ecameras, vec!["https://api/ecameras.hevc"]);
+        assert_eq!(res.qlogs, vec!["https://api/qlog.zst"]);
+        assert_eq!(res.logs, vec!["https://api/rlog.bz2"]);
+    }
+
+    #[test]
+    fn expiry_validation_clamps_and_defaults() {
+        let mut q = UploadUrlQuery {
+            path: "p".into(),
+            expiry_days: None,
+        };
+        q.validate_expiry();
+        assert_eq!(q.expiry_days, Some(1));
+
+        q.expiry_days = Some(7);
+        q.validate_expiry();
+        assert_eq!(q.expiry_days, Some(7));
+
+        q.expiry_days = Some(0);
+        q.validate_expiry();
+        assert_eq!(q.expiry_days, Some(30));
+
+        q.expiry_days = Some(99);
+        q.validate_expiry();
+        assert_eq!(q.expiry_days, Some(30));
+    }
+
+    #[test]
+    fn generate_turn_credentials_produces_future_timestamp_and_base64_hmac() {
+        let (username, credential) = generate_turn_credentials("turn-secret");
+        let ts: u64 = username.parse().expect("username should be unix timestamp");
+        assert!(ts > 1_700_000_000);
+        assert!(!credential.is_empty());
+    }
+}
