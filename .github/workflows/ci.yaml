@@ -194,7 +194,10 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-          components: clippy
+          components: clippy, llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
@@ -205,8 +208,32 @@ jobs:
       - name: Run cargo clippy
         run: cargo clippy --all-features
 
-      - name: Run cargo test
-        run: cargo test --all-features --all
+      - name: Run cargo test with coverage
+        run: |
+          cargo llvm-cov --all-features --workspace \
+            --ignore-filename-regex 'src/cereal/.*|src/models/_entities/.*' \
+            --lcov --output-path lcov.info
+
+      - name: Publish coverage summary & HTML report
+        run: |
+          {
+            echo "### Rust Code Coverage"
+            echo '```text'
+            cargo llvm-cov report --summary-only \
+              --ignore-filename-regex 'src/cereal/.*|src/models/_entities/.*'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cargo llvm-cov report --html --output-dir coverage-html \
+            --ignore-filename-regex 'src/cereal/.*|src/models/_entities/.*'
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-coverage
+          path: |
+            lcov.info
+            coverage-html/
+          retention-days: 14
 
   # ===========================================================================
   # Stage 2: Build, Scan & Publish Container Images (only after Stage 1 passes)
