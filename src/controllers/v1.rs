@@ -1345,7 +1345,7 @@ struct RTCIceServer {
     credential: String,
 }
 
-#[allow(dead_code, deprecated)]
+#[allow(dead_code)]
 fn generate_turn_credentials(secret_key: &str) -> (String, String) {
     // Get the current UNIX timestamp (valid for 1 hour)
     let timestamp = SystemTime::now()
@@ -1359,7 +1359,10 @@ fn generate_turn_credentials(secret_key: &str) -> (String, String) {
     // Generate HMAC-SHA256 hash as the password
     let mut mac = HmacSha256::new_from_slice(secret_key.as_bytes()).unwrap();
     mac.update(username.as_bytes());
-    let credential = base64::encode(mac.finalize().into_bytes());
+    let credential = base64::Engine::encode(
+        &base64::engine::general_purpose::STANDARD,
+        mac.finalize().into_bytes(),
+    );
 
     (username, credential)
 }
