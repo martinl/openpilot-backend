@@ -117,26 +117,7 @@ impl JWT {
     }
 
     pub fn parse_unverified(&self, token: &str) -> JWTResult<TokenData<UserClaims>> {
-        let mut insecure_validation = Validation::new(self.algorithm);
-        // Accept any signing algorithm when parsing without signature verification
-        insecure_validation.algorithms = vec![
-            Algorithm::HS256,
-            Algorithm::HS384,
-            Algorithm::HS512,
-            Algorithm::RS256,
-            Algorithm::RS384,
-            Algorithm::RS512,
-            Algorithm::ES256,
-            Algorithm::ES384,
-        ];
-        insecure_validation.insecure_disable_signature_validation();
-        insecure_validation.leeway = 30;
-        insecure_validation.validate_nbf = true;
-        decode::<UserClaims>(
-            token,
-            &DecodingKey::from_secret(&"no_secrete".as_bytes()),
-            &insecure_validation,
-        )
+        jsonwebtoken::dangerous::insecure_decode::<UserClaims>(token)
     }
 }
 

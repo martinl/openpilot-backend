@@ -5,7 +5,7 @@ use axum::{
     routing::patch,
     Extension,
 };
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use jsonwebtoken::get_current_timestamp;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
