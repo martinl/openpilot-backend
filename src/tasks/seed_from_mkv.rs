@@ -1,6 +1,4 @@
-use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use rand::SeedableRng;
 // For the `shuffle` method
 use crate::common::re::*;
 use crate::loco_rs::prelude::*;
@@ -80,8 +78,7 @@ impl Task for SeedFromMkv {
                 keys.extend(json["keys"].as_array().unwrap().clone());
             }
         }
-        let mut rng = StdRng::from_entropy();
-        keys.shuffle(&mut rng);
+        keys.shuffle(&mut rand::rng());
 
         let progress_bar = ProgressBar::new(keys.len() as u64);
         progress_bar.set_style(
