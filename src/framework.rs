@@ -471,7 +471,7 @@ pub mod controller {
             self
         }
 
-        fn join_path(prefix: Option<&str>, uri: &str) -> String {
+        pub(super) fn join_path(prefix: Option<&str>, uri: &str) -> String {
             let p = prefix.unwrap_or("").trim_matches('/');
             let u = uri.trim_matches('/');
             match (p.is_empty(), u.is_empty()) {
@@ -943,4 +943,244 @@ pub mod prelude {
         worker::{self, AppWorker, Processor, Worker},
         Error, Result,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+
+    use axum::http::{header, StatusCode};
+    use bytes::Bytes;
+    use serde::Serialize;
+    use serial_test::serial;
+
+    use super::*;
+
+    #[test]
+    fn error_into_response_maps_expected_status_codes() {
+        assert_eq!(
+            Error::Unauthorized("nope".into()).into_response().status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            Error::BadRequest("bad".into()).into_response().status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            Error::NotFound.into_response().status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            Error::Model(model::ModelError::EntityNotFound)
+                .into_response()
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            Error::Model(model::ModelError::EntityAlreadyExists)
+                .into_response()
+                .status(),
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            Error::string("boom").into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test]
+    fn controller_error_helpers_return_expected_variants() {
+        assert!(matches!(
+            controller::unauthorized::<()>("denied"),
+            Err(Error::Unauthorized(msg)) if msg == "denied"
+        ));
+        assert!(matches!(
+            controller::bad_request::<()>("invalid"),
+            Err(Error::BadRequest(msg)) if msg == "invalid"
+        ));
+        assert!(matches!(
+            controller::not_found::<()>(),
+            Err(Error::NotFound)
+        ));
+    }
+
+    #[test]
+    fn routes_join_path_normalizes_slashes_and_prefixes() {
+        assert_eq!(controller::Routes::join_path(None, ""), "/");
+        assert_eq!(controller::Routes::join_path(None, "/"), "/");
+        assert_eq!(controller::Routes::join_path(None, "login"), "/login");
+        assert_eq!(controller::Routes::join_path(None, "/login/"), "/login");
+        assert_eq!(controller::Routes::join_path(Some("v1"), ""), "/v1");
+        assert_eq!(controller::Routes::join_path(Some("/v1/"), "/"), "/v1");
+        assert_eq!(
+            controller::Routes::join_path(Some("v1"), "/me/devices"),
+            "/v1/me/devices"
+        );
+        assert_eq!(
+            controller::Routes::join_path(Some("/connectdata/"), "/{id}/coords.json/"),
+            "/connectdata/{id}/coords.json"
+        );
+    }
+
+    #[test]
+    fn format_helpers_produce_expected_responses() {
+        let json_resp = controller::format::json(serde_json::json!({ "ok": true })).unwrap();
+        assert_eq!(json_resp.status(), StatusCode::OK);
+        assert_eq!(
+            json_resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
+
+        let html_resp = controller::format::html("<h1>hi</h1>").unwrap();
+        assert_eq!(html_resp.status(), StatusCode::OK);
+        assert_eq!(
+            html_resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "text/html; charset=utf-8"
+        );
+
+        let empty_resp = controller::format::empty().unwrap();
+        assert_eq!(empty_resp.status(), StatusCode::OK);
+
+        let text_resp = controller::format::render().text("plain").unwrap();
+        assert_eq!(text_resp.status(), StatusCode::OK);
+
+        let redir_resp = controller::format::render().redirect("/login").unwrap();
+        assert_eq!(redir_resp.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            redir_resp.headers().get(header::LOCATION).unwrap(),
+            "/login"
+        );
+    }
+
+    struct StubRenderer;
+    impl controller::views::ViewRenderer for StubRenderer {
+        fn render<S: Serialize>(&self, key: &str, data: S) -> Result<String> {
+            let val = serde_json::to_string(&data)?;
+            Ok(format!("{key}:{val}"))
+        }
+    }
+
+    #[test]
+    fn render_view_uses_view_renderer() {
+        let resp = controller::format::render()
+            .view(&StubRenderer, "login.html", serde_json::json!({ "a": 1 }))
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "text/html; charset=utf-8"
+        );
+    }
+
+    #[test]
+    fn task_vars_parses_colon_equals_and_dashed_cli_args() {
+        let args = vec![
+            "refresh:true".to_string(),
+            "--dongle_id=abc123".to_string(),
+            "throttle_ms=50".to_string(),
+            "ignored_flag".to_string(),
+        ];
+        let vars = task::Vars::from_args(&args);
+        assert_eq!(vars.cli_arg("refresh").unwrap(), "true");
+        assert_eq!(vars.cli_arg("dongle_id").unwrap(), "abc123");
+        assert_eq!(vars.cli_arg("throttle_ms").unwrap(), "50");
+        assert!(vars.cli_arg("missing").is_err());
+    }
+
+    #[tokio::test]
+    async fn storage_upload_and_download_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("nested/test.bin");
+        let storage = storage::Storage::single(());
+        let payload = Bytes::from_static(b"openpilot-data");
+
+        storage.upload(&file_path, &payload).await.unwrap();
+        let downloaded: Vec<u8> = storage.download(&file_path).await.unwrap();
+        assert_eq!(downloaded, payload.as_ref());
+    }
+
+    #[test]
+    #[serial]
+    fn environment_from_env_parses_known_and_custom_values() {
+        let prev = env::var("LOCO_ENV").ok();
+
+        env::remove_var("LOCO_ENV");
+        assert_eq!(
+            environment::Environment::from_env(),
+            environment::Environment::Any("useradmin".into())
+        );
+
+        env::set_var("LOCO_ENV", "development");
+        assert_eq!(
+            environment::Environment::from_env(),
+            environment::Environment::Development
+        );
+
+        env::set_var("LOCO_ENV", "production");
+        assert_eq!(
+            environment::Environment::from_env(),
+            environment::Environment::Production
+        );
+
+        env::set_var("LOCO_ENV", "test");
+        assert_eq!(
+            environment::Environment::from_env(),
+            environment::Environment::Test
+        );
+
+        env::set_var("LOCO_ENV", "connect");
+        assert_eq!(
+            environment::Environment::from_env(),
+            environment::Environment::Any("connect".into())
+        );
+
+        match prev {
+            Some(v) => env::set_var("LOCO_ENV", v),
+            None => env::remove_var("LOCO_ENV"),
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn config_from_env_uses_expected_ports_and_secret() {
+        let prev_useradmin = env::var("USERADMIN_PORT").ok();
+        let prev_connect = env::var("CONNECT_PORT").ok();
+        let prev_port = env::var("PORT").ok();
+        let prev_secret = env::var("SERVER_SECRET").ok();
+
+        env::remove_var("USERADMIN_PORT");
+        env::remove_var("CONNECT_PORT");
+        env::remove_var("PORT");
+        env::set_var("SERVER_SECRET", "unit-test-secret");
+
+        let cfg = config::Config::from_env(&environment::Environment::Any("useradmin".into()));
+        assert_eq!(cfg.port, 3112);
+        assert_eq!(cfg.get_jwt_config().unwrap().secret, "unit-test-secret");
+
+        let connect_cfg =
+            config::Config::from_env(&environment::Environment::Any("connect".into()));
+        assert_eq!(connect_cfg.port, 3111);
+
+        env::set_var("USERADMIN_PORT", "4000");
+        let custom_cfg =
+            config::Config::from_env(&environment::Environment::Any("useradmin".into()));
+        assert_eq!(custom_cfg.port, 4000);
+
+        match prev_useradmin {
+            Some(v) => env::set_var("USERADMIN_PORT", v),
+            None => env::remove_var("USERADMIN_PORT"),
+        }
+        match prev_connect {
+            Some(v) => env::set_var("CONNECT_PORT", v),
+            None => env::remove_var("CONNECT_PORT"),
+        }
+        match prev_port {
+            Some(v) => env::set_var("PORT", v),
+            None => env::remove_var("PORT"),
+        }
+        match prev_secret {
+            Some(v) => env::set_var("SERVER_SECRET", v),
+            None => env::remove_var("SERVER_SECRET"),
+        }
+    }
 }
