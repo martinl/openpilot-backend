@@ -1,5 +1,6 @@
 [advisories]
 ignore = [
-    # Transitive via sqlx/jsonwebtoken (Marvin Attack on RSA private-key decryption; we use HMAC JWTs)
-    "RUSTSEC-2023-0071",
+    # Uncompiled optional dep in Cargo.lock via sqlx 0.8 (sqlx-sqlite -> libsqlite3-sys 0.30.1);
+    # our workspace only enables sqlx-postgres and never compiles SQLite.
+    "RUSTSEC-2026-0459",
 ]
