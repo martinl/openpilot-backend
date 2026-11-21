@@ -301,7 +301,6 @@ pub mod app {
 pub mod controller {
     use std::sync::Arc;
 
-    use async_trait::async_trait;
     use axum::{
         extract::FromRequestParts,
         http::request::Parts,
@@ -389,7 +388,6 @@ pub mod controller {
             }
         }
 
-        #[async_trait]
         impl<S, E> FromRequestParts<S> for ViewEngine<E>
         where
             S: Send + Sync,

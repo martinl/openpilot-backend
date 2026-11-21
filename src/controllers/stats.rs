@@ -231,7 +231,7 @@ async fn handle_uploads_socket(
 
     let initial = upload_tracker.snapshot_message(is_superuser);
     if let Ok(json) = serde_json::to_string(&initial) {
-        if sender.send(Message::Text(json)).await.is_err() {
+        if sender.send(Message::Text(json.into())).await.is_err() {
             return;
         }
     }
@@ -241,7 +241,7 @@ async fn handle_uploads_socket(
             _ = interval.tick() => {
                 let snapshot = upload_tracker.snapshot_message(is_superuser);
                 let Ok(json) = serde_json::to_string(&snapshot) else { continue; };
-                if sender.send(Message::Text(json)).await.is_err() {
+                if sender.send(Message::Text(json.into())).await.is_err() {
                     break;
                 }
             }

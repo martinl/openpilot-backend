@@ -1560,42 +1560,45 @@ pub fn routes() -> Routes {
         .add("/me", get(get_me))
         .add("/me/devices", get(get_my_devices))
         .add("/me/jwt", get(get_me_jwt))
-        .add("/route/:fullname", get(route_info))
-        .add("/route/:fullname", patch(patch_route))
-        .add("/route/:fullname/files", get(get_route_files))
-        .add("/route/:fullname/qcamera.m3u8", get(get_qcam_stream))
-        .add("/route/:fullname/share_signature", get(get_share_signature))
-        .add("/:dongleId/upload_urls/", post(upload_urls_handler))
-        .add(".4/:dongleId/upload_url/", get(get_upload_url))
-        .add("/devices/:dongle_id/routes_segments", get(route_segment))
-        .add("/devices/:dongle_id/routes", get(route_segment))
+        .add("/route/{fullname}", get(route_info))
+        .add("/route/{fullname}", patch(patch_route))
+        .add("/route/{fullname}/files", get(get_route_files))
+        .add("/route/{fullname}/qcamera.m3u8", get(get_qcam_stream))
         .add(
-            "/devices/:dongle_id/routes/preserved",
+            "/route/{fullname}/share_signature",
+            get(get_share_signature),
+        )
+        .add("/{dongleId}/upload_urls/", post(upload_urls_handler))
+        .add(".4/{dongleId}/upload_url/", get(get_upload_url))
+        .add("/devices/{dongle_id}/routes_segments", get(route_segment))
+        .add("/devices/{dongle_id}/routes", get(route_segment))
+        .add(
+            "/devices/{dongle_id}/routes/preserved",
             get(preserved_routes),
         )
-        .add("/devices/:dongle_id/unpair", post(unpair))
-        .add("/devices/:dongle_id/location", get(device_location))
-        .add("/devices/:dongle_id/firehose", post(set_firehose))
-        .add(".1/devices/:dongle_id/stats", get(device_stats))
-        .add("/devices/:dongle_id/users", get(device_users))
-        .add("/devices/:dongle_id/add_user", post(add_user))
-        .add("/devices/:dongle_id/del_user", post(del_user))
-        .add("/devices/:dongle_id", patch(update_device_alias))
-        .add(".1/devices/:dongle_id", get(device_info))
+        .add("/devices/{dongle_id}/unpair", post(unpair))
+        .add("/devices/{dongle_id}/location", get(device_location))
+        .add("/devices/{dongle_id}/firehose", post(set_firehose))
+        .add(".1/devices/{dongle_id}/stats", get(device_stats))
+        .add("/devices/{dongle_id}/users", get(device_users))
+        .add("/devices/{dongle_id}/add_user", post(add_user))
+        .add("/devices/{dongle_id}/del_user", post(del_user))
+        .add("/devices/{dongle_id}", patch(update_device_alias))
+        .add(".1/devices/{dongle_id}", get(device_info))
         .add(
-            "/navigation/:dongle_id/set_destination",
+            "/navigation/{dongle_id}/set_destination",
             post(set_destination),
         )
         .add(
-            "/navigation/:dongle_id/locations",
+            "/navigation/{dongle_id}/locations",
             get(get_locations)
                 .put(put_locations)
                 .delete(delete_location),
         )
         .add(
-            "/navigation/:dongle_id/next",
+            "/navigation/{dongle_id}/next",
             get(get_next_destination).delete(clear_nav_destination),
         )
-        .add("/navigation/:dongle_id/favorite", post(set_nav_favorite))
+        .add("/navigation/{dongle_id}/favorite", post(set_nav_favorite))
         .add("/iceservers", get(get_ice_servers))
 }

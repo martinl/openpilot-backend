@@ -406,11 +406,14 @@ pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectincoming")
         .add(
-            "/:dongle_id/:timestamp/:segment/:file",
+            "/{dongle_id}/{timestamp}/{segment}/{file}",
             put(upload_driving_logs),
         )
-        .add("/:dongle_id/crash/:log_id/:commit/:name", put(upload_crash))
-        .add("/:dongle_id/boot/:file", put(upload_bootlogs))
+        .add(
+            "/{dongle_id}/crash/{log_id}/{commit}/{name}",
+            put(upload_crash),
+        )
+        .add("/{dongle_id}/boot/{file}", put(upload_bootlogs))
 }
 
 #[cfg(test)]

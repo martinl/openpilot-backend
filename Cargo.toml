@@ -28,8 +28,8 @@ sea-orm = { version = "1.1.0", features = [
   "with-uuid",
 ] }
 rand = "0.10.4"
-axum = { version = "0.7.1", features = ["multipart", "ws"] }
-axum-extra = { version = "0.9", features = ["cookie"] }
+axum = { version = "0.8.9", features = ["multipart", "ws"] }
+axum-extra = { version = "0.10", features = ["cookie"] }
 hyper = "1.3.1"
 uuid = { version = "1.6.0", features = ["v4", "serde"] }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json"] }
@@ -44,7 +44,7 @@ futures = "0.3.30"
 async-compression = { version = "0.4.8", features = ["tokio", "bzip2", "zstd"] }
 tokio-util = { version = "0.7.10", features = ["io"] }
 url = "2.5.0"
-tower-http = { version = "0.5.2", features = ["normalize-path", "cors", "fs", "trace", "catch-panic"] }
+tower-http = { version = "0.6", features = ["normalize-path", "cors", "fs", "trace", "catch-panic"] }
 tower-layer = "0.3.2"
 futures-util = "0.3.30"
 tokio-tungstenite = "0.30.0"
@@ -58,7 +58,7 @@ hmac = "0.13"
 hex = "0.4.3"
 thiserror = "2.0"
 image = "0.25.1"
-axum-server = { version = "0.7", features = ["tls-rustls"] }
+axum-server = { version = "0.9", features = ["tls-rustls"] }
 rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std"] }
 rayon = "1.10.0"
 tempfile = "3.10.1"

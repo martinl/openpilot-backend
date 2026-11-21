@@ -109,7 +109,7 @@ impl IntoResponse for ErrorResponse {
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("maps")
-        .add("/*path", axum::routing::any(proxy_mapbox))
+        .add("/{*path}", axum::routing::any(proxy_mapbox))
 }
 
 pub async fn proxy_mapbox(

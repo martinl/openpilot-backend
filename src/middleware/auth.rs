@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use async_trait::async_trait;
 use axum::{
     extract::{FromRef, FromRequestParts, Query},
     http::{request::Parts, HeaderMap},
@@ -93,7 +92,6 @@ impl IntoResponse for AuthError {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for MyJWT
 where
     AppContext: FromRef<S>,

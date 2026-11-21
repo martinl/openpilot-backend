@@ -182,7 +182,7 @@ async fn handle_jsonrpc_request(
         clients.insert(id_string.clone(), response_tx);
     }
 
-    let message = Message::Text(serde_json::to_string(&payload)?);
+    let message = Message::Text(serde_json::to_string(&payload)?.into());
     if let Err(err) = forward_command_to_device(&endpoint_dongle_id, &manager, &message).await {
         let mut clients = manager.clients.lock().await;
         clients.remove(&id_string);
@@ -485,7 +485,8 @@ async fn handle_socket(
                                 }
                             };
                             // Convert the response to a text message and forward it.
-                            let message = Message::Text(serde_json::to_string(&response).unwrap());
+                            let message =
+                                Message::Text(serde_json::to_string(&response).unwrap().into());
                             let _ =
                                 forward_command_to_device(&endpoint_dongle_id, &manager, &message)
                                     .await;
@@ -557,14 +558,16 @@ pub async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>, db: &Data
 
     for (dongle_id, device_sender) in &device_senders {
         tracing::trace!("Sending ping to {}", &dongle_id);
-        if let Err(e) = device_sender.send(Message::Ping(Vec::new())).await {
+        if let Err(e) = device_sender.send(Message::Ping(Vec::new().into())).await {
             tracing::trace!("Failed to send ping to device {}: {}", dongle_id, e);
         }
     }
     for (dongle_id, device_sender) in device_senders {
         if let Ok(Some(latest_msg)) = DMQM::find_latest_msg(db, &dongle_id).await {
             if let Err(e) = device_sender
-                .send(Message::Text(latest_msg.json_rpc_request.to_string()))
+                .send(Message::Text(
+                    latest_msg.json_rpc_request.to_string().into(),
+                ))
                 .await
             {
                 tracing::error!("Failed to send jsonrpc msg to device {}: {}", dongle_id, e);
@@ -593,7 +596,7 @@ pub async fn send_reset(
         id: Id::Int(1),
     };
     let msg = serde_json::to_string(&reset_dongle_rpc).unwrap();
-    match sender.send(Message::Text(msg)).await {
+    match sender.send(Message::Text(msg.into())).await {
         Ok(_) => tracing::info!("Sent resetDongle"),
         Err(_) => tracing::error!("Failed to send resetDongle"),
     }
@@ -602,7 +605,7 @@ pub async fn send_reset(
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("ws")
-        .add("/v2/:dongle_id", get(handle_device_ws))
-        .add("/:dongle_id", get(handle_device_ws))
-        .add("/:dongle_id", post(handle_jsonrpc_request))
+        .add("/v2/{dongle_id}", get(handle_device_ws))
+        .add("/{dongle_id}", get(handle_device_ws))
+        .add("/{dongle_id}", post(handle_jsonrpc_request))
 }
