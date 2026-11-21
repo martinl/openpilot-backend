@@ -1086,3 +1086,30 @@ pub fn routes() -> Routes {
         .add("/{dongle_id}/cloudlogs", get(get_cloudlog_cache))
         .add("/cloudlogs/all", get(get_all_cloudlogs))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn asset_download_rejects_invalid_and_traversal_lookup_keys() {
+        let client = reqwest::Client::new();
+        for bad_key in [
+            "",
+            "../etc/passwd",
+            "dongle/2024/0/rlog.zst",
+            "key with spaces",
+            "key?query=1",
+            "key\0null",
+        ] {
+            let err = asset_download(bad_key.to_string(), &client, HeaderMap::new())
+                .await
+                .unwrap_err();
+            assert_eq!(
+                err,
+                (StatusCode::BAD_REQUEST, "Invalid lookup key"),
+                "expected 400 for key {bad_key:?}"
+            );
+        }
+    }
+}

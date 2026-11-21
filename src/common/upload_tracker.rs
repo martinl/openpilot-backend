@@ -177,3 +177,52 @@ impl Drop for ActiveUploadGuard {
         self.tracker.finish(&self.id);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tracks_bytes_and_redacts_file_name_for_non_superusers() {
+        let tracker = UploadTracker::new();
+        let id = tracker.start(UploadMeta {
+            kind: UploadKind::DrivingLog,
+            dongle_id: "1d3dc3e03047b0c7".into(),
+            file_name: "rlog.zst".into(),
+        });
+
+        tracker.add_bytes(&id, 1024);
+        tracker.add_bytes(&id, 2048);
+        tracker.add_bytes("nonexistent-id", 512);
+
+        let public_snap = tracker.snapshot_message(false);
+        assert_eq!(public_snap.uploads.len(), 1);
+        assert_eq!(public_snap.uploads[0].bytes_received, 3072);
+        assert_eq!(public_snap.uploads[0].file_name, None);
+
+        let admin_snap = tracker.snapshot_message(true);
+        assert_eq!(admin_snap.uploads.len(), 1);
+        assert_eq!(admin_snap.uploads[0].file_name.as_deref(), Some("rlog.zst"));
+
+        tracker.finish(&id);
+        assert!(tracker.snapshot_message(true).uploads.is_empty());
+    }
+
+    #[test]
+    fn active_upload_guard_removes_entry_on_drop() {
+        let tracker = UploadTracker::new();
+        {
+            let guard = ActiveUploadGuard::new(
+                tracker.clone(),
+                UploadMeta {
+                    kind: UploadKind::Bootlog,
+                    dongle_id: "aaaaaaaaaaaaaaaa".into(),
+                    file_name: "boot.bz2".into(),
+                },
+            );
+            tracker.add_bytes(guard.id(), 4096);
+            assert_eq!(tracker.snapshot_message(false).uploads.len(), 1);
+        }
+        assert!(tracker.snapshot_message(false).uploads.is_empty());
+    }
+}

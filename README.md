@@ -1,6 +1,9 @@
 # openpilot-backend
 
-Self-hosted, open-source backend for **openpilot Connect** and **Athena** (Rust / Loco.rs + PostgreSQL 18 + Valkey 9 + Connect SPA frontend).
+[![CI](https://github.com/martinl/openpilot-backend/actions/workflows/ci.yaml/badge.svg)](https://github.com/martinl/openpilot-backend/actions/workflows/ci.yaml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/martinl/openpilot-backend/badges/coverage.json)](https://github.com/martinl/openpilot-backend/actions/workflows/ci.yaml)
+
+Self-hosted, open-source backend for **openpilot Connect** and **Athena** (Rust / Axum 0.8 + SeaORM 1.1 + PostgreSQL 18 + Connect SPA frontend).
 
 Forked from `konik-ai/backend` and adapted for containerized / Kubernetes deployments behind an external TLS gateway.
 
