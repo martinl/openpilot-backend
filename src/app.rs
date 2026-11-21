@@ -254,7 +254,23 @@ struct MyServerConfig {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use axum::{
+        body::Body,
+        http::{header, Request, StatusCode},
+        Router,
+    };
+    use tower::ServiceExt;
+
     use super::*;
+    use crate::loco_rs::{
+        config::{Config, JWTConfig},
+        environment::Environment,
+        storage::Storage,
+    };
+
+    const TEST_SECRET: &str = "AAAAAAAAAAAAAAAAAAAA";
 
     #[test]
     fn all_controller_routes_register_cleanly() {
@@ -273,6 +289,102 @@ mod tests {
             router = router.merge(routes.into_router());
         }
         let _ = router;
+    }
+
+    fn test_router() -> Router {
+        let ctx = AppContext {
+            environment: Environment::Any("useradmin".to_string()),
+            db: DatabaseConnection::Disconnected,
+            config: Config {
+                jwt: JWTConfig {
+                    secret: TEST_SECRET.to_string(),
+                    expiration: 3600,
+                },
+                port: 3112,
+                binding: "127.0.0.1".to_string(),
+            },
+            storage: Arc::new(Storage::single(())),
+        };
+        App::routes(&ctx).into_router(ctx)
+    }
+
+    #[tokio::test]
+    async fn http_router_rejects_unauthenticated_api_and_redirects_useradmin() {
+        let app = test_router();
+
+        let api_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/me")
+                    .header(header::HOST, "api.example.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(api_resp.status(), StatusCode::UNAUTHORIZED);
+
+        let admin_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .header(header::HOST, "useradmin.example.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(admin_resp.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            admin_resp.headers().get(header::LOCATION).unwrap(),
+            "/login"
+        );
+
+        let logout_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/auth/logout")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(logout_resp.status(), StatusCode::FOUND);
+        assert_eq!(
+            logout_resp.headers().get(header::LOCATION).unwrap(),
+            "/login"
+        );
+
+        let bad_jwt_resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/me")
+                    .header(header::HOST, "api.example.com")
+                    .header(header::AUTHORIZATION, "JWT not.a.valid.jwt")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bad_jwt_resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn http_router_returns_404_for_unknown_paths() {
+        let app = test_router();
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/does-not-exist")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 }
 

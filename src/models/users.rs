@@ -151,3 +151,49 @@ impl super::_entities::users::Model {
 }
 
 impl ActiveModel {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_user(id: i32, identity: Uuid, name: &str) -> UM {
+        UM {
+            id,
+            identity,
+            email: Some(format!("{name}@example.com")),
+            name: name.to_string(),
+            points: 10,
+            superuser: false,
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+        }
+    }
+
+    #[tokio::test]
+    async fn find_by_identity_rejects_malformed_uuid_before_query() {
+        let db = DatabaseConnection::Disconnected;
+        let err = UM::find_by_identity(&db, "not-a-uuid").await;
+        assert!(matches!(err, Err(ModelError::Any(_))));
+    }
+
+    #[test]
+    fn user_validation_and_jwt_generation() {
+        let valid_model = users::ActiveModel {
+            name: ActiveValue::Set("ok".to_string()),
+            ..Default::default()
+        };
+        assert!(valid_model.validate().is_ok());
+
+        let short_model = users::ActiveModel {
+            name: ActiveValue::Set("x".to_string()),
+            ..Default::default()
+        };
+        assert!(short_model.validate().is_err());
+
+        let user = sample_user(1, Uuid::new_v4(), "alice");
+        let secret = "AAAAAAAAAAAAAAAAAAAA";
+        let token = user.generate_jwt(secret, &3600).unwrap();
+        let claims = jwt::JWT::new(secret).validate(&token).unwrap().claims;
+        assert_eq!(claims.identity, user.identity.to_string());
+    }
+}
