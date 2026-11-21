@@ -609,3 +609,80 @@ pub fn routes() -> Routes {
         .add("/{dongle_id}", get(handle_device_ws))
         .add("/{dongle_id}", post(handle_jsonrpc_request))
 }
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+
+    use super::*;
+
+    #[test]
+    fn ws_error_into_response_maps_expected_status_codes() {
+        assert_eq!(
+            Error::DeviceNotFound.into_response().status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            Error::Timeout.into_response().status(),
+            StatusCode::REQUEST_TIMEOUT
+        );
+        assert_eq!(
+            Error::Unauthorized("nope".into()).into_response().status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            Error::SendFailed("err".into()).into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test]
+    fn jsonrpc_id_and_message_roundtrip() {
+        assert_eq!(String::from(Id::String("abc".into())), "abc");
+        assert_eq!(String::from(Id::Int(42)), "42");
+
+        let req: JsonRpcMessage =
+            serde_json::from_str(r#"{"jsonrpc":"2.0","method":"getVersion","params":null,"id":7}"#)
+                .unwrap();
+        assert!(matches!(req, JsonRpcMessage::Request(r) if r.method == "getVersion"));
+
+        let resp: JsonRpcMessage =
+            serde_json::from_str(r#"{"jsonrpc":"2.0","result":{"ok":true},"id":"req-1"}"#).unwrap();
+        assert!(matches!(resp, JsonRpcMessage::Response(r) if r.result.is_some()));
+    }
+
+    #[tokio::test]
+    async fn connection_manager_tracks_online_devices_and_forwards_commands() {
+        let manager = ConnectionManager::new();
+        assert!(!manager.is_device_online("1d3dc3e03047b0c7").await);
+
+        let offline_err =
+            forward_command_to_device("1d3dc3e03047b0c7", &manager, &Message::Text("ping".into()))
+                .await;
+        assert!(matches!(offline_err, Err(Error::DeviceNotFound)));
+
+        let (tx, mut rx) = mpsc::channel(4);
+        manager.devices.lock().await.insert(
+            "1d3dc3e03047b0c7".into(),
+            DeviceConnection {
+                connection_id: "conn-1".into(),
+                sender: tx,
+                command_queue: vec![],
+            },
+        );
+        assert!(manager.is_device_online("1d3dc3e03047b0c7").await);
+
+        forward_command_to_device(
+            "1d3dc3e03047b0c7",
+            &manager,
+            &Message::Text("hello-device".into()),
+        )
+        .await
+        .unwrap();
+
+        match rx.recv().await {
+            Some(Message::Text(text)) => assert_eq!(text, "hello-device"),
+            other => panic!("expected text message, got {other:?}"),
+        }
+    }
+}

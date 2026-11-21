@@ -287,3 +287,107 @@ pub fn extract_token_from_query(name: &str, parts: &Parts) -> Result<String, Str
         .cloned()
         .ok_or_else(|| format!("`{name}` query parameter not found"))
 }
+
+#[cfg(test)]
+mod tests {
+    use axum::http::{header, Request, StatusCode};
+    use serial_test::serial;
+
+    use super::*;
+
+    fn make_parts(uri: &str, headers: &[(&str, &str)]) -> Parts {
+        let mut builder = Request::builder().uri(uri);
+        for (k, v) in headers {
+            builder = builder.header(*k, *v);
+        }
+        builder.body(()).unwrap().into_parts().0
+    }
+
+    #[test]
+    fn extract_token_from_header_validates_jwt_prefix() {
+        let mut headers = HeaderMap::new();
+        assert!(extract_token_from_header(&headers).is_err());
+
+        headers.insert(header::AUTHORIZATION, "Bearer wrong".parse().unwrap());
+        assert!(extract_token_from_header(&headers).is_err());
+
+        headers.insert(header::AUTHORIZATION, "JWT my-token-123".parse().unwrap());
+        assert_eq!(extract_token_from_header(&headers).unwrap(), "my-token-123");
+    }
+
+    #[test]
+    fn extract_token_from_cookie_and_query() {
+        let parts = make_parts(
+            "/v1/me?sig=query-tok&access_token=dir-tok",
+            &[("cookie", "jwt_test=cookie-tok")],
+        );
+        assert_eq!(
+            extract_token_from_cookie("jwt_test", &parts).unwrap(),
+            "cookie-tok"
+        );
+        assert!(extract_token_from_cookie("jwt", &parts).is_err());
+        assert_eq!(
+            extract_token_from_query("sig", &parts).unwrap(),
+            "query-tok"
+        );
+        assert_eq!(
+            extract_token_from_query("access_token", &parts).unwrap(),
+            "dir-tok"
+        );
+        assert!(extract_token_from_query("missing", &parts).is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn extract_token_respects_precedence_and_cookie_name() {
+        let prev = std::env::var("COOKIE_NAME").ok();
+        std::env::set_var("COOKIE_NAME", "jwt_test");
+
+        let mut parts_query = make_parts(
+            "/v1/me?sig=from-sig",
+            &[
+                ("cookie", "jwt_test=from-cookie"),
+                ("authorization", "JWT from-header"),
+            ],
+        );
+        assert_eq!(extract_token(&mut parts_query).unwrap(), "from-sig");
+
+        let mut parts_cookie = make_parts(
+            "/v1/me",
+            &[
+                ("cookie", "jwt_test=from-cookie"),
+                ("authorization", "JWT from-header"),
+            ],
+        );
+        assert_eq!(extract_token(&mut parts_cookie).unwrap(), "from-cookie");
+
+        let mut parts_header = make_parts("/v1/me", &[("authorization", "JWT from-header")]);
+        assert_eq!(extract_token(&mut parts_header).unwrap(), "from-header");
+
+        let mut parts_access = make_parts("/v1/me?access_token=from-access", &[]);
+        assert_eq!(extract_token(&mut parts_access).unwrap(), "from-access");
+
+        match prev {
+            Some(v) => std::env::set_var("COOKIE_NAME", v),
+            None => std::env::remove_var("COOKIE_NAME"),
+        }
+    }
+
+    #[test]
+    fn missing_token_redirects_on_useradmin_and_returns_401_on_api() {
+        let mut api_parts = make_parts("/v1/me", &[("host", "api.example.com")]);
+        let api_err = extract_token(&mut api_parts).unwrap_err();
+        assert_eq!(api_err.into_response().status(), StatusCode::UNAUTHORIZED);
+
+        let mut admin_parts = make_parts("/", &[("host", "useradmin.example.com")]);
+        let admin_err = extract_token(&mut admin_parts).unwrap_err();
+        let resp = admin_err.into_response();
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+        assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/login");
+
+        assert_eq!(
+            AuthError::InternalError.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+}
