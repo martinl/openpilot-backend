@@ -30,14 +30,12 @@ Tagging:
    ```bash
    rm -f /data/params/d/DongleId /persist/comma/dongle_id
    ```
-4. Export your server URLs in `launch_openpilot.sh`:
+4. Export your server URLs in `/data/continue.sh` right before `exec ./launch_openpilot.sh` (persists across reboots and openpilot/sunnypilot OTA updates without modifying `/data/openpilot`):
    ```bash
-   #!/usr/bin/bash
    export API_HOST=https://api.<your-domain>
    export ATHENA_HOST=wss://athena.<your-domain>
-   exec ./launch_chffrplus.sh
    ```
-5. Commit your change (`git commit -a -m "switch to custom connect backend"`), disable automatic updates if applicable, reboot, and scan the pairing QR code on `https://connect.<your-domain>`.
+5. Reboot the device and scan the pairing QR code on `https://connect.<your-domain>`.
 
 ---
 

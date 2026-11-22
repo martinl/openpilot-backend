@@ -1595,7 +1595,10 @@ pub fn routes() -> Routes {
         .add("/devices/{dongle_id}/users", get(device_users))
         .add("/devices/{dongle_id}/add_user", post(add_user))
         .add("/devices/{dongle_id}/del_user", post(del_user))
-        .add("/devices/{dongle_id}", patch(update_device_alias))
+        .add(
+            "/devices/{dongle_id}",
+            get(device_info).patch(update_device_alias),
+        )
         .add(".1/devices/{dongle_id}", get(device_info))
         .add(
             "/navigation/{dongle_id}/set_destination",

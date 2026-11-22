@@ -226,9 +226,18 @@ fn extract_token(parts: &mut Parts) -> Result<String, AuthError> {
     // Attempt to extract the token from the query string
     extract_token_from_query(QUERY_TOKEN_PREFIX, parts)
         .or_else(|_| {
-            // If extracting from the query string fails, attempt to extract from cookies
+            // If extracting from the query string fails, attempt to extract from cookies.
+            // Try the configured COOKIE_NAME first (e.g. `jwt_test` for browsers in test),
+            // then fall back to the default `jwt` cookie because openpilot's `athenad.py`
+            // hardcodes `cookie="jwt=<token>"` on WebSocket connections.
             let cookie_name = auth_cookie_name();
-            extract_token_from_cookie(&cookie_name, parts)
+            extract_token_from_cookie(&cookie_name, parts).or_else(|e| {
+                if cookie_name != AUTH_COOKIE_NAME {
+                    extract_token_from_cookie(AUTH_COOKIE_NAME, parts)
+                } else {
+                    Err(e)
+                }
+            })
         })
         .or_else(|_| {
             // If extracting from cookies fails, attempt to extract from the authorization header
@@ -351,11 +360,21 @@ mod tests {
         let mut parts_cookie = make_parts(
             "/v1/me",
             &[
-                ("cookie", "jwt_test=from-cookie"),
+                ("cookie", "jwt_test=from-cookie; jwt=from-default-jwt"),
                 ("authorization", "JWT from-header"),
             ],
         );
         assert_eq!(extract_token(&mut parts_cookie).unwrap(), "from-cookie");
+
+        // openpilot athenad.py hardcodes `Cookie: jwt=<device_token>` even when COOKIE_NAME=jwt_test
+        let mut parts_athena_cookie = make_parts(
+            "/ws/v2/1d3dc3e03047b0c7",
+            &[("cookie", "jwt=from-athena-device")],
+        );
+        assert_eq!(
+            extract_token(&mut parts_athena_cookie).unwrap(),
+            "from-athena-device"
+        );
 
         let mut parts_header = make_parts("/v1/me", &[("authorization", "JWT from-header")]);
         assert_eq!(extract_token(&mut parts_header).unwrap(), "from-header");
