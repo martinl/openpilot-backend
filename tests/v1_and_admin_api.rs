@@ -31,6 +31,7 @@ async fn v1_and_useradmin_endpoints_end_to_end() {
     std::env::set_var("MKV_ENDPOINT", &mkv.base_url);
     std::env::set_var("API_ENDPOINT", "https://api.example.com");
     std::env::set_var("ATHENA_ENDPOINT", "https://athena.example.com");
+    std::env::set_var("WS_ENDPOINT", "wss://athena.example.com");
     std::env::set_var("FRONTEND_URL", "https://connect.example.com");
     std::env::set_var("USERADMIN_HOST", "useradmin.example.com");
     std::env::set_var("GITHUB_CLIENT", "test-gh-client");
@@ -89,6 +90,7 @@ async fn v1_and_useradmin_endpoints_end_to_end() {
         end_time_utc_millis: 1_707_150_208_000,
         end_lat: 59.437,
         end_lng: 24.7536,
+        maxqlog: 0,
         maxqcamera: 0,
         ..Default::default()
     };
@@ -295,6 +297,262 @@ async fn v1_and_useradmin_endpoints_end_to_end() {
         .await
         .unwrap();
     assert_eq!(r.status(), StatusCode::OK);
+
+    // PATCH /v1/route/{fullname}
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::PATCH)
+                .uri(format!("/v1/route/{fullname}"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "is_public": true }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+
+    // Navigation lifecycle: set_destination -> next -> put/get/delete locations -> favorite -> clear next
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(format!("/v1/navigation/{dongle_id}/set_destination"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "latitude": 59.437,
+                        "longitude": 24.7536,
+                        "place_name": "Tallinn",
+                        "place_details": "Estonia"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/v1/navigation/{dongle_id}/next"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::PUT)
+                .uri(format!("/v1/navigation/{dongle_id}/locations"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "place_name": "Home",
+                        "place_details": "123 Main St",
+                        "latitude": 59.437,
+                        "longitude": 24.7536,
+                        "save_type": "home",
+                        "label": "Home"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/v1/navigation/{dongle_id}/locations"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    let locs = body_json(r).await;
+    let saved_id = locs
+        .as_array()
+        .and_then(|arr| arr.first())
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_str())
+        .unwrap()
+        .to_string();
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::DELETE)
+                .uri(format!("/v1/navigation/{dongle_id}/locations"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "id": saved_id }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(format!("/v1/navigation/{dongle_id}/favorite"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "address": "123 Main St",
+                        "save_type": "home",
+                        "label": "Home"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::DELETE)
+                .uri(format!("/v1/navigation/{dongle_id}/next"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+
+    // v2 endpoints: pilotauth, user/token, auth/h/redirect, pilotpair error path
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/v2/pilotauth?imei=111111111111111&imei2=222222222222222&serial=ser-new&public_key=pub-pilotauth-2&register_token=not-a-jwt")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    let pilotauth_body = body_json(r).await;
+    assert_eq!(pilotauth_body["dongle_id"].as_str().unwrap().len(), 16);
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v2/user/token")
+                .header(header::AUTHORIZATION, &auth_header)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    let tok_body = body_json(r).await;
+    assert!(!tok_body["access_token"].as_str().unwrap().is_empty());
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v2/auth/h/redirect?code=abc123&state=service,connect.example.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::FOUND);
+    assert_eq!(
+        r.headers().get(header::LOCATION).unwrap(),
+        "https://connect.example.com/auth/?provider=h&code=abc123"
+    );
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v2/auth/h/redirect?code=abc123&state=service,localhost:3000")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::FOUND);
+    assert_eq!(
+        r.headers().get(header::LOCATION).unwrap(),
+        "http://localhost:3000/auth/?provider=h&code=abc123"
+    );
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v2/auth/h/redirect?code=abc123")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/v2/pilotpair")
+                .header(header::AUTHORIZATION, &auth_header)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(Body::from("pair_token=not-a-jwt"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+
+    // Params endpoints
+    for uri in ["/params/?params=NonExistentParam", "/params/metrics"] {
+        let r = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .header(header::AUTHORIZATION, &auth_header)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(r.status(), StatusCode::OK, "failed on {uri}");
+    }
 
     // Useradmin & stats HTML views
     for uri in ["/login", "/", "/cloudlogs", "/stats/usage"] {

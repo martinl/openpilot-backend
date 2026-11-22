@@ -252,6 +252,12 @@ jobs:
             coverage-html/
           retention-days: 14
 
+      - name: Enforce minimum line coverage
+        run: |
+          cargo llvm-cov report --summary-only \
+            --ignore-filename-regex 'src/cereal/.*|src/models/_entities/.*' \
+            --fail-under-lines 50
+
       - name: Update coverage badge on master
         if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         env:
@@ -267,9 +273,9 @@ jobs:
           pct = data["data"][0]["totals"]["lines"]["percent"]
           if pct >= 80:
               color = "brightgreen"
-          elif pct >= 60:
+          elif pct >= 50:
               color = "green"
-          elif pct >= 40:
+          elif pct >= 35:
               color = "yellowgreen"
           elif pct >= 20:
               color = "yellow"

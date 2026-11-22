@@ -224,6 +224,7 @@ async fn routes_segments_bootlogs_anonlogs_and_msg_queues_crud() {
         end_time_utc_millis: 1_707_150_208_000,
         end_lat: 59.437,
         end_lng: 24.7536,
+        maxqlog: 0,
         ..Default::default()
     };
     route.add_route_self(&db).await.unwrap();
