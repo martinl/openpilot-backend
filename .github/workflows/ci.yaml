@@ -35,9 +35,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-    outputs:
-      frontend_changed: ${{ steps.changes.outputs.frontend }}
-      minikeyvalue_changed: ${{ steps.changes.outputs.minikeyvalue }}
 
     steps:
       - name: Checkout repository
@@ -45,26 +42,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Detect changed components for PRs
-        id: changes
-        run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-            echo "minikeyvalue=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD || true)
-          if echo "$CHANGED" | grep -qE '^(frontend|Dockerfile\.frontend|deploy/docker/|\.github/workflows/ci\.yaml)'; then
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "frontend=false" >> "$GITHUB_OUTPUT"
-          fi
-          if echo "$CHANGED" | grep -qE '^(minikeyvalue|\.github/workflows/ci\.yaml)'; then
-            echo "minikeyvalue=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "minikeyvalue=false" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Lint Dockerfile (backend)
         uses: hadolint/hadolint-action@v3.5.0
@@ -306,6 +283,7 @@ jobs:
   build-backend:
     name: Build & Push Backend Image
     needs: [lint, rustfmt, audit, check-and-test]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -330,7 +308,6 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
@@ -356,21 +333,20 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
-          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: mode=max
+          sbom: true
           build-args: |
             BUILD_SHA=${{ github.sha }}
           cache-from: type=gha,scope=backend
-          cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,mode=max,scope=backend' || '' }}
+          cache-to: type=gha,mode=max,scope=backend
 
       - name: Scan backend image for vulnerabilities (Trivy)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ github.event_name != 'pull_request' && format('{0}/{1}/backend@{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.build.outputs.digest) || format('{0}/{1}/backend:{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.meta.outputs.version) }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/backend@${{ steps.build.outputs.digest }}
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "0"
@@ -378,7 +354,7 @@ jobs:
   build-frontend:
     name: Build & Push Frontend Image
     needs: [lint, rustfmt, audit, check-and-test]
-    if: github.event_name != 'pull_request' || needs.lint.outputs.frontend_changed == 'true'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -401,7 +377,6 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
@@ -427,19 +402,18 @@ jobs:
           context: .
           file: ./Dockerfile.frontend
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
-          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: mode=max
+          sbom: true
           cache-from: type=gha,scope=frontend
-          cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,mode=max,scope=frontend' || '' }}
+          cache-to: type=gha,mode=max,scope=frontend
 
       - name: Scan frontend image for vulnerabilities (Trivy)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ github.event_name != 'pull_request' && format('{0}/{1}/frontend@{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.build.outputs.digest) || format('{0}/{1}/frontend:{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.meta.outputs.version) }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend@${{ steps.build.outputs.digest }}
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "0"
@@ -447,7 +421,7 @@ jobs:
   build-minikeyvalue:
     name: Build & Push MiniKeyValue Image
     needs: [lint, rustfmt, audit, check-and-test]
-    if: github.event_name != 'pull_request' || needs.lint.outputs.minikeyvalue_changed == 'true'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -470,7 +444,6 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
@@ -496,19 +469,18 @@ jobs:
           context: ./minikeyvalue
           file: ./minikeyvalue/Dockerfile
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
-          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: mode=max
+          sbom: true
           cache-from: type=gha,scope=minikeyvalue
-          cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,mode=max,scope=minikeyvalue' || '' }}
+          cache-to: type=gha,mode=max,scope=minikeyvalue
 
       - name: Scan minikeyvalue image for vulnerabilities (Trivy)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ github.event_name != 'pull_request' && format('{0}/{1}/minikeyvalue@{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.build.outputs.digest) || format('{0}/{1}/minikeyvalue:{2}', env.REGISTRY, env.IMAGE_PREFIX, steps.meta.outputs.version) }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/minikeyvalue@${{ steps.build.outputs.digest }}
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "0"
