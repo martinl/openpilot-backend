@@ -171,38 +171,28 @@ where
     }
 }
 
-fn handle_jwt_err(parts: &mut Parts, error_kind: &ErrorKind) -> AuthError {
-    let host_header = parts
+fn is_useradmin_host(parts: &Parts) -> bool {
+    let host = parts
         .headers
         .get(axum::http::header::HOST)
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default();
+    let subdomain = host.split('.').next().unwrap_or_default();
+    subdomain == "useradmin" || subdomain.starts_with("useradmin-")
+}
 
-    let parts: Vec<&str> = host_header.split('.').collect();
-
-    if parts[0] == "useradmin" {
-        // Redirect for useradmin subdomain
+fn handle_jwt_err(parts: &mut Parts, error_kind: &ErrorKind) -> AuthError {
+    if is_useradmin_host(parts) {
         AuthError::RedirectToLogin
     } else {
-        // Return JWTError with the ErrorKind
         AuthError::JWTError(error_kind.clone())
     }
 }
 
 fn handle_unauth(parts: &mut Parts, msg: &str) -> AuthError {
-    let host_header = parts
-        .headers
-        .get(axum::http::header::HOST)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or_default();
-
-    let parts: Vec<&str> = host_header.split('.').collect();
-
-    if parts[0] == "useradmin" {
-        // Redirect for useradmin subdomain
+    if is_useradmin_host(parts) {
         AuthError::RedirectToLogin
     } else {
-        // Return JWTError with the ErrorKind
         AuthError::Unauthorized(msg.to_string())
     }
 }
@@ -390,15 +380,24 @@ mod tests {
 
     #[test]
     fn missing_token_redirects_on_useradmin_and_returns_401_on_api() {
-        let mut api_parts = make_parts("/v1/me", &[("host", "api.example.com")]);
-        let api_err = extract_token(&mut api_parts).unwrap_err();
-        assert_eq!(api_err.into_response().status(), StatusCode::UNAUTHORIZED);
+        for api_host in ["api.example.com", "api-test.example.com"] {
+            let mut api_parts = make_parts("/v1/me", &[("host", api_host)]);
+            let api_err = extract_token(&mut api_parts).unwrap_err();
+            assert_eq!(api_err.into_response().status(), StatusCode::UNAUTHORIZED);
+        }
 
-        let mut admin_parts = make_parts("/", &[("host", "useradmin.example.com")]);
-        let admin_err = extract_token(&mut admin_parts).unwrap_err();
-        let resp = admin_err.into_response();
-        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-        assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/login");
+        for admin_host in ["useradmin.example.com", "useradmin-test.example.com"] {
+            let mut admin_parts = make_parts("/", &[("host", admin_host)]);
+            let admin_err = extract_token(&mut admin_parts).unwrap_err();
+            let resp = admin_err.into_response();
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/login");
+
+            let jwt_resp =
+                handle_jwt_err(&mut admin_parts, &ErrorKind::InvalidToken).into_response();
+            assert_eq!(jwt_resp.status(), StatusCode::SEE_OTHER);
+            assert_eq!(jwt_resp.headers().get(header::LOCATION).unwrap(), "/login");
+        }
 
         assert_eq!(
             AuthError::InternalError.into_response().status(),
