@@ -695,22 +695,6 @@ impl Default for QLogResult {
     }
 }
 
-#[allow(non_snake_case)]
-#[derive(Deserialize, Debug, Serialize)]
-struct StateData {
-    state: String,
-    enabled: bool,
-    alertStatus: i8,
-}
-
-#[derive(Deserialize, Debug, Serialize)]
-struct JsonEvent {
-    r#type: String,
-    time: u64,
-    route_offset_millis: u64,
-    data: StateData,
-}
-
 async fn parse_qlog(
     client: &Client,
     seg: &mut segments::ActiveModel,

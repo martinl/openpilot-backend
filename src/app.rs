@@ -124,7 +124,7 @@ impl Hooks for App {
 
     async fn after_routes(router: axum::Router, ctx: &AppContext) -> Result<axum::Router> {
         let router = NormalizePathLayer::trim_trailing_slash().layer(router);
-        let router = axum::Router::new().nest_service("", router);
+        let router = axum::Router::new().fallback_service(router);
 
         if ctx.environment == crate::loco_rs::environment::Environment::Any("connect".to_string()) {
             return Ok(router);
@@ -305,7 +305,9 @@ mod tests {
             },
             storage: Arc::new(Storage::single(())),
         };
-        App::routes(&ctx).into_router(ctx)
+        let router = App::routes(&ctx).into_router(ctx);
+        let router = NormalizePathLayer::trim_trailing_slash().layer(router);
+        axum::Router::new().fallback_service(router)
     }
 
     #[tokio::test]
