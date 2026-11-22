@@ -84,8 +84,10 @@ async fn connectdata_downloads_range_and_delete_route_end_to_end() {
     let (_ctx, app) = common::build_test_app(db.clone());
 
     // Public/derived downloads: coords, events, sprite
+    // Note: coords_download/events_download/sprite_download take canonical_route_name
+    // (`{dongle_id}_{ts}`) in the second path segment.
     for file in ["coords.json", "events.json", "sprite.jpg"] {
-        let uri = format!("/connectdata/{dongle_id}/{ts}/0/{file}");
+        let uri = format!("/connectdata/{dongle_id}/{dongle_id}_{ts}/0/{file}");
         let r = app
             .clone()
             .oneshot(
@@ -117,24 +119,34 @@ async fn connectdata_downloads_range_and_delete_route_end_to_end() {
     let body = to_bytes(range_resp.into_body(), usize::MAX).await.unwrap();
     assert!(!body.is_empty());
 
-    // Cloudlog cache endpoints
-    for uri in [
-        format!("/connectdata/{dongle_id}/cloudlogs"),
-        "/connectdata/cloudlogs/all".to_string(),
-    ] {
-        let r = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri(&uri)
-                    .header(header::AUTHORIZATION, &auth_header)
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(r.status(), StatusCode::OK, "failed on {uri}");
-    }
+    // Cloudlog cache endpoints:
+    // - empty cache for dongle -> 404
+    // - non-superuser on /cloudlogs/all -> 401
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/connectdata/{dongle_id}/cloudlogs"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::NOT_FOUND);
+
+    let r = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/connectdata/cloudlogs/all")
+                .header(header::AUTHORIZATION, &auth_header)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
     // DELETE route -> removes route from DB
     let del_resp = app
