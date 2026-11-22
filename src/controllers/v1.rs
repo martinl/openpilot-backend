@@ -572,6 +572,7 @@ async fn device_info(
         prime: device.prime,
         prime_type: device.prime_type,
         trial_claimed: true,
+        device_type: device.device_type,
         sim_id: device.sim_id,
         ..Default::default()
     })
@@ -982,9 +983,11 @@ async fn get_my_devices(
 
 async fn get_me(auth: MyJWT, State(ctx): State<AppContext>) -> Result<Response> {
     let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+    let identity = String::from(user_model.identity);
     format::json(MeResponse {
         email: user_model.email,
-        id: String::from(user_model.identity),
+        id: identity.clone(),
+        user_id: identity,
         regdate: user_model.created_at.and_utc().timestamp(),
         points: user_model.points,
         superuser: user_model.superuser,

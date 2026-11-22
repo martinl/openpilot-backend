@@ -37,7 +37,7 @@ pub struct DeviceInfoResponse {
     /// Latitude of last location
     pub last_gps_lng: f64,
     /// Longitude of last location
-    pub last_gps_accur: f64,
+    pub last_gps_accuracy: f64,
     /// Accuracy (m) of last location
     pub last_gps_speed: f64,
     /// Speed (m/s) at last location
@@ -140,6 +140,7 @@ pub struct RouteSegmentResponse {
 pub struct MeResponse {
     pub email: Option<String>,
     pub id: String,
+    pub user_id: String,
     pub points: i64,
     pub regdate: i64,
     pub superuser: bool,
