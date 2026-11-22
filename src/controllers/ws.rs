@@ -605,9 +605,11 @@ pub async fn send_reset(
 
 pub fn routes() -> Routes {
     Routes::new()
-        .prefix("ws")
-        .add("/v2/{dongle_id}", get(handle_device_ws))
-        .add("/{dongle_id}", get(handle_device_ws))
+        .add("/ws/v2/{dongle_id}", get(handle_device_ws))
+        .add(
+            "/ws/{dongle_id}",
+            get(handle_device_ws).post(handle_jsonrpc_request),
+        )
         .add("/{dongle_id}", post(handle_jsonrpc_request))
 }
 

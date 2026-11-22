@@ -382,15 +382,29 @@ mod tests {
     async fn http_router_returns_404_for_unknown_paths() {
         let app = test_router();
         let resp = app
+            .clone()
             .oneshot(
                 Request::builder()
-                    .uri("/does-not-exist")
+                    .uri("/v1/does-not-exist")
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        // Root-level POST /{dongle_id} (Athena JSON-RPC) is registered and requires auth
+        let athena_resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/1d3dc3e03047b0c7")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(athena_resp.status(), StatusCode::UNAUTHORIZED);
     }
 }
 
