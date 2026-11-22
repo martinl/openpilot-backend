@@ -148,8 +148,86 @@ async fn connectdata_downloads_range_and_delete_route_end_to_end() {
         .unwrap();
     assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
 
+    // Device uploads via /connectincoming into MockMkvServer
+    let device_token = connect::middleware::jwt::JWT::new(common::TEST_JWT_SECRET)
+        .generate_token(&3600, dongle_id.clone())
+        .unwrap();
+    let device_auth = format!("JWT {device_token}");
+
+    let boot_upload = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::PUT)
+                .uri(format!("/connectincoming/{dongle_id}/boot/{ts}.bz2"))
+                .header(header::AUTHORIZATION, &device_auth)
+                .body(Body::from("bootlog-bytes"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(boot_upload.status(), StatusCode::CREATED);
+
+    let crash_upload = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::PUT)
+                .uri(format!(
+                    "/connectincoming/{dongle_id}/crash/log1/deadbeef/crash.log"
+                ))
+                .header(header::AUTHORIZATION, &device_auth)
+                .body(Body::from("crash-bytes"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(crash_upload.status(), StatusCode::CREATED);
+
+    let drive_upload = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::PUT)
+                .uri(format!("/connectincoming/{dongle_id}/{ts}/0/qlog.zst"))
+                .header(header::AUTHORIZATION, &device_auth)
+                .body(Body::from("qlog-bytes"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(drive_upload.status(), StatusCode::CREATED);
+
+    // Download the uploaded bootlog + verify invalid bootlog format -> 400
+    let boot_dl = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/connectdata/bootlog/{dongle_id}_boot_{ts}.bz2"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(boot_dl.status(), StatusCode::OK);
+
+    let bad_boot = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/connectdata/bootlog/not-a-valid-bootlog")
+                .header(header::AUTHORIZATION, &auth_header)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(bad_boot.status(), StatusCode::BAD_REQUEST);
+
     // DELETE route -> removes route from DB
     let del_resp = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method(Method::DELETE)
@@ -162,6 +240,20 @@ async fn connectdata_downloads_range_and_delete_route_end_to_end() {
         .unwrap();
     assert_eq!(del_resp.status(), StatusCode::OK);
     assert!(RM::find_route(&db, &fullname).await.is_err());
+
+    // DELETE all device data
+    let del_all = app
+        .oneshot(
+            Request::builder()
+                .method(Method::DELETE)
+                .uri(format!("/connectdata/delete/{dongle_id}"))
+                .header(header::AUTHORIZATION, &auth_header)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(del_all.status(), StatusCode::OK);
 
     // Make sure user wasn't affected
     let mut active_u: connect::models::users::ActiveModel = user.into();
