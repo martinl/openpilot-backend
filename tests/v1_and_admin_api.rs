@@ -31,6 +31,7 @@ async fn v1_and_useradmin_endpoints_end_to_end() {
     std::env::set_var("MKV_ENDPOINT", &mkv.base_url);
     std::env::set_var("API_ENDPOINT", "https://api.example.com");
     std::env::set_var("ATHENA_ENDPOINT", "https://athena.example.com");
+    std::env::set_var("WS_ENDPOINT", "wss://athena.example.com");
     std::env::set_var("FRONTEND_URL", "https://connect.example.com");
     std::env::set_var("USERADMIN_HOST", "useradmin.example.com");
     std::env::set_var("GITHUB_CLIENT", "test-gh-client");
