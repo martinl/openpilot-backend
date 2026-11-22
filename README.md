@@ -3,7 +3,7 @@
 [![CI](https://github.com/martinl/openpilot-backend/actions/workflows/ci.yaml/badge.svg)](https://github.com/martinl/openpilot-backend/actions/workflows/ci.yaml)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/martinl/openpilot-backend/badges/coverage.json)](https://github.com/martinl/openpilot-backend/actions/workflows/ci.yaml)
 
-Self-hosted, open-source backend for **openpilot Connect** and **Athena** (Rust / Axum 0.8 + SeaORM 1.1 + PostgreSQL 18 + Connect SPA frontend).
+Self-hosted, open-source backend for **openpilot Connect** and **Athena** (Rust 1.100 / Axum 0.8 + SeaORM 1.1 + PostgreSQL 18 + Connect SPA frontend).
 
 Forked from `konik-ai/backend` and adapted for containerized / Kubernetes deployments behind an external TLS gateway.
 
@@ -11,7 +11,7 @@ Forked from `konik-ai/backend` and adapted for containerized / Kubernetes deploy
 
 ## Container Images (GHCR)
 
-Built and published automatically by [.github/workflows/ci.yaml](.github/workflows/ci.yaml) after all lint, format, security audit, clippy, and unit/doc tests pass:
+Built and published automatically by [.github/workflows/ci.yaml](.github/workflows/ci.yaml) after all lint, format, security audit, clippy, unit + PostgreSQL integration tests, and the 50%+ line coverage gate (`cargo-llvm-cov`) pass:
 - `ghcr.io/martinl/openpilot-backend/backend` ([Dockerfile](Dockerfile) — Rust `connect-cli`, `LOCO_ENV=useradmin`, port `3112`)
 - `ghcr.io/martinl/openpilot-backend/frontend` ([Dockerfile.frontend](Dockerfile.frontend) — `martinl/openpilot-frontend` SPA on `nginx:stable-alpine`, port `80`)
 - `ghcr.io/martinl/openpilot-backend/minikeyvalue` (`minikeyvalue/Dockerfile` — blob storage, ports `3000-3005`)
@@ -68,7 +68,13 @@ docker build -t openpilot-minikeyvalue:local -f minikeyvalue/Dockerfile ./minike
 
 ### 4. Native Cargo Tests (macOS)
 ```bash
-rustup default 1.90.0
-brew install pkg-config libpq capnp ffmpeg
-RUST_MIN_STACK=134217728 cargo test --lib
+rustup default 1.100.0
+brew install capnp ffmpeg
+
+# Unit tests only (no database required)
+cargo test --lib
+
+# Full unit + integration suite (DB tests auto-skip when TEST_DATABASE_URL is unset)
+TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres_test \
+  cargo test --all-features --workspace
 ```
