@@ -51,8 +51,8 @@ git -C openpilot submodule sync opendbc_repo
 git -C openpilot submodule update --init --depth 1 opendbc_repo
 git submodule update --init --depth 1 frontend minikeyvalue
 
-# Optional local hooks (gitleaks, hadolint, rustfmt, yaml/CRLF checks)
-brew install pre-commit hadolint
+# Optional local hooks (gitleaks, hadolint, rustfmt, cargo-audit, yaml/CRLF checks)
+brew install pre-commit hadolint cargo-audit
 pre-commit install
 ```
 

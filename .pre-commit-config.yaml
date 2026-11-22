@@ -1,5 +1,5 @@
 # Install locally:
-#   brew install pre-commit   # or: pip install pre-commit
+#   brew install pre-commit hadolint cargo-audit
 #   pre-commit install
 #   pre-commit autoupdate
 
@@ -40,3 +40,9 @@ repos:
         entry: rustfmt --edition 2021 --config skip_children=true
         language: system
         types: [rust]
+      - id: cargo-audit
+        name: cargo audit (RustSec)
+        entry: env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE cargo audit
+        language: system
+        pass_filenames: false
+        always_run: true
