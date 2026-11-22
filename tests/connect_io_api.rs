@@ -184,12 +184,17 @@ async fn connectdata_downloads_range_and_delete_route_end_to_end() {
         .unwrap();
     assert_eq!(crash_upload.status(), StatusCode::CREATED);
 
+    // Use a distinct route timestamp so the background LogSegmentWorker cannot
+    // race with DELETE /connectdata/delete/{dongle_id}/{ts} below.
+    let upload_ts = "2024-02-05--17-00-00";
     let drive_upload = app
         .clone()
         .oneshot(
             Request::builder()
                 .method(Method::PUT)
-                .uri(format!("/connectincoming/{dongle_id}/{ts}/0/qlog.zst"))
+                .uri(format!(
+                    "/connectincoming/{dongle_id}/{upload_ts}/0/qlog.zst"
+                ))
                 .header(header::AUTHORIZATION, &device_auth)
                 .body(Body::from("qlog-bytes"))
                 .unwrap(),
