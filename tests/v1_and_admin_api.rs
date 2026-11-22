@@ -89,6 +89,7 @@ async fn v1_and_useradmin_endpoints_end_to_end() {
         end_time_utc_millis: 1_707_150_208_000,
         end_lat: 59.437,
         end_lng: 24.7536,
+        maxqlog: 0,
         maxqcamera: 0,
         ..Default::default()
     };
