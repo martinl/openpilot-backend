@@ -59,11 +59,11 @@ impl DeviceRegistrationParams {
     }
 }
 
-/// Key	    Type    Description
+/// Key     Type    Description
 ///
-///"dongle_id"	    (string)	Dongle ID
+///"dongle_id"     (string)    Dongle ID
 ///
-///"access_token"	(string)    JWT token (see Authentication)
+///"access_token"  (string)    JWT token (see Authentication)
 #[derive(Debug, Deserialize, Serialize)]
 struct PilotAuthResponse {
     dongle_id: String,
@@ -105,25 +105,25 @@ pub async fn pilotauth(
     match result {
         Ok(_) => {
             tracing::info!("Device registered: {}", &dongle_id);
-            return (
+            (
                 StatusCode::OK,
                 format::json(PilotAuthResponse {
-                    dongle_id: dongle_id,
+                    dongle_id,
                     access_token: "".into(),
                 }),
-            );
+            )
         }
         Err(result) => {
             tracing::error!("Failed to register device: {} {}", dongle_id, result);
-            return (
+            (
                 StatusCode::FORBIDDEN,
                 Err(crate::loco_rs::Error::Model(result)),
-            );
+            )
         }
     }
 }
 
-/// pair_token	JWT Token signed by your EON private key containing payload {"identity": <dongle-id>, "pair": true}
+/// pair_token  JWT Token signed by your EON private key containing payload {"identity": <dongle-id>, "pair": true}
 #[derive(Debug, Deserialize, Serialize)]
 struct DevicePairParams {
     pair_token: String,
@@ -157,8 +157,7 @@ async fn decode_pair_token(
         Algorithm::RS256 => DecodingKey::from_rsa_pem(device.public_key.as_bytes()),
         Algorithm::ES256 => DecodingKey::from_ec_pem(device.public_key.as_bytes()),
         _ => return Err(jsonwebtoken::errors::ErrorKind::InvalidAlgorithm.into()),
-    }
-    .map_err(|e| e)?;
+    }?;
 
     let claims = decode::<DevicePairClaims>(jwt, &key, &Validation::new(alg));
     match claims {
@@ -196,13 +195,13 @@ async fn pilotpair(
                 dongle_id,
             });
         }
-        return Ok((StatusCode::FORBIDDEN, "This device is already paired").into_response());
+        Ok((StatusCode::FORBIDDEN, "This device is already paired").into_response())
     } else {
-        return Ok((
+        Ok((
             StatusCode::BAD_REQUEST,
             "If you want to pair, 'pair' should be true!",
         )
-            .into_response());
+            .into_response())
     }
 }
 

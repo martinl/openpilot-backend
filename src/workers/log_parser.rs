@@ -527,22 +527,22 @@ async fn update_route_info(
             active_route_model.end_lng = ActiveValue::Set(segment_model.end_lng);
         }
 
-        if segment_model.qlog_url != "" {
+        if !segment_model.qlog_url.is_empty() {
             active_route_model.maxqlog = ActiveValue::Set(segment_model.number as i32);
         }
-        if segment_model.rlog_url != "" {
+        if !segment_model.rlog_url.is_empty() {
             active_route_model.maxlog = ActiveValue::Set(segment_model.number as i32);
         }
-        if segment_model.qcam_url != "" {
+        if !segment_model.qcam_url.is_empty() {
             active_route_model.maxqcamera = ActiveValue::Set(segment_model.number as i32);
         }
-        if segment_model.fcam_url != "" {
+        if !segment_model.fcam_url.is_empty() {
             active_route_model.maxcamera = ActiveValue::Set(segment_model.number as i32);
         }
-        if segment_model.dcam_url != "" {
+        if !segment_model.dcam_url.is_empty() {
             active_route_model.maxdcamera = ActiveValue::Set(segment_model.number as i32);
         }
-        if segment_model.ecam_url != "" {
+        if !segment_model.ecam_url.is_empty() {
             active_route_model.maxecamera = ActiveValue::Set(segment_model.number as i32);
         }
     }
@@ -580,7 +580,7 @@ async fn update_route_info(
     active_route_model.segment_start_times = ActiveValue::Set(segment_start_times.into());
     active_route_model.segment_end_times = ActiveValue::Set(segment_end_times.into());
     active_route_model.segment_numbers = ActiveValue::Set(segment_numbers.into());
-    return Ok(());
+    Ok(())
 }
 
 fn route_has_any_uploads(segment_models: &[segments::Model]) -> bool {
@@ -603,9 +603,7 @@ async fn handle_qlog(
     ctx: &AppContext,
     client: &Client,
 ) -> worker::Result<Option<QLogResult>> {
-    let bytes_stream = response
-        .bytes_stream()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+    let bytes_stream = response.bytes_stream().map_err(std::io::Error::other);
     let stream_reader = StreamReader::new(bytes_stream);
     let mut decoder: std::pin::Pin<Box<dyn tokio::io::AsyncRead + Send>> =
         if args.file.ends_with(".bz2") {
@@ -650,7 +648,7 @@ async fn handle_qlog(
         return Ok(None);
     }
 
-    match parse_qlog(&client, seg, decompressed_data, args, ctx).await {
+    match parse_qlog(client, seg, decompressed_data, args, ctx).await {
         Ok(result) => Ok(Some(result)),
         Err(e) => {
             if e.to_string().contains(EMPTY_QLOG_ERROR) {
@@ -850,7 +848,7 @@ async fn parse_qlog(
                             let params = init_data.get_params().ok();
 
                             if let Some(params) = params {
-                                if let Some(entries) = params.get_entries().ok() {
+                                if let Ok(entries) = params.get_entries() {
                                     handle_device_params(&args.dongle_id, entries);
                                 }
                             }
@@ -1157,7 +1155,7 @@ fn handle_device_params<'a>(
                 }
                 increment_param_value(key_str, &string);
                 // Also just save the key and value for that device
-                save_device_param(&dongle_id, key_str, &string);
+                save_device_param(dongle_id, key_str, &string);
             }
         }
     }
@@ -1221,10 +1219,12 @@ mod tests {
     fn route_upload_detection_checks_all_media_types() {
         let empty_segment = segments::Model::default();
         assert!(!segment_has_any_upload(&empty_segment));
-        assert!(!route_has_any_uploads(&[empty_segment.clone()]));
+        assert!(!route_has_any_uploads(std::slice::from_ref(&empty_segment)));
 
-        let mut qcam_segment = segments::Model::default();
-        qcam_segment.qcam_url = "http://example/qcamera.ts".to_string();
+        let qcam_segment = segments::Model {
+            qcam_url: "http://example/qcamera.ts".to_string(),
+            ..Default::default()
+        };
         assert!(segment_has_any_upload(&qcam_segment));
         assert!(route_has_any_uploads(&[empty_segment, qcam_segment]));
     }

@@ -66,9 +66,7 @@ impl worker::Worker<BootlogParserWorkerArgs> for BootlogParserWorker {
                     return Ok(());
                 }
             };
-        let bytes_stream = response
-            .bytes_stream()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+        let bytes_stream = response.bytes_stream().map_err(std::io::Error::other);
         let stream_reader = tokio_util::io::StreamReader::new(bytes_stream);
         let mut bz2_decoder = async_compression::tokio::bufread::BzDecoder::new(stream_reader);
 
@@ -143,6 +141,8 @@ async fn parse_bootlog(decompressed_data: Vec<u8>) -> worker::Result<ParsedLog> 
     let mut writer: Vec<u8> = Vec::new();
     let mut cursor: std::io::Cursor<Vec<u8>> = std::io::Cursor::new(decompressed_data);
     let mut date_string: String = "".to_string();
+    let re_date =
+        regex::Regex::new(r"end at \w+ (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \w+.").unwrap();
     while let Ok(message_reader) =
         capnp::serialize::read_message(&mut cursor, ReaderOptions::default())
     {
@@ -150,43 +150,36 @@ async fn parse_bootlog(decompressed_data: Vec<u8>) -> worker::Result<ParsedLog> 
             .get_root::<log_capnp::event::Reader>()
             .map_err(Box::from)?;
         //writeln!(writer, "{:#?}", event).map_err(Box::from)?;
-        match event.which().map_err(Box::from)? {
-            log_capnp::event::Boot(log) => {
-                let bootlog = log.unwrap();
-                if bootlog.has_launch_log() {
-                    writeln!(writer, "{:#?}", bootlog.get_launch_log().unwrap())
-                        .map_err(Box::from)?;
-                }
-                if bootlog.has_pstore() {
-                    writeln!(writer, "{:#?}", bootlog.get_pstore().unwrap()).map_err(Box::from)?;
-                }
-                if bootlog.has_commands() {
-                    let data = bootlog.get_commands().unwrap();
-                    let re_date =
-                        regex::Regex::new(r"end at \w+ (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \w+.")
-                            .unwrap();
-
-                    if let Some(caps) = re_date.captures(&format!("{:?}", data)) {
-                        if let Some(matched) = caps.get(1) {
-                            println!("Extracted string: {}", matched.as_str());
-                            // 2023-11-21 15:10:55
-                            // 2023-11-21--15-10-55
-                            date_string = matched
-                                .as_str()
-                                .to_string()
-                                .replace(":", "-")
-                                .replace(" ", "--");
-                            println!("Date found: {}", date_string);
-                        } else {
-                            println!("No 'end at' timestamp found.");
-                        }
-                    } else {
-                        println!("No matches found.");
-                    }
-                    writeln!(writer, "{:?}", data).map_err(Box::from)?;
-                }
+        if let log_capnp::event::Boot(log) = event.which().map_err(Box::from)? {
+            let bootlog = log.unwrap();
+            if bootlog.has_launch_log() {
+                writeln!(writer, "{:#?}", bootlog.get_launch_log().unwrap()).map_err(Box::from)?;
             }
-            _ => (),
+            if bootlog.has_pstore() {
+                writeln!(writer, "{:#?}", bootlog.get_pstore().unwrap()).map_err(Box::from)?;
+            }
+            if bootlog.has_commands() {
+                let data = bootlog.get_commands().unwrap();
+
+                if let Some(caps) = re_date.captures(&format!("{:?}", data)) {
+                    if let Some(matched) = caps.get(1) {
+                        println!("Extracted string: {}", matched.as_str());
+                        // 2023-11-21 15:10:55
+                        // 2023-11-21--15-10-55
+                        date_string = matched
+                            .as_str()
+                            .to_string()
+                            .replace(":", "-")
+                            .replace(" ", "--");
+                        println!("Date found: {}", date_string);
+                    } else {
+                        println!("No 'end at' timestamp found.");
+                    }
+                } else {
+                    println!("No matches found.");
+                }
+                writeln!(writer, "{:?}", data).map_err(Box::from)?;
+            }
         }
     }
     Ok(ParsedLog {

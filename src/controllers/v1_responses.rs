@@ -14,7 +14,7 @@ pub struct DeviceInfoResponse {
     pub athena_host: String,
     /// Last connected athena server
     pub last_athena_ping: i64,
-    /// (integer)	Timestamp of last athena ping
+    /// (integer)    Timestamp of last athena ping
     pub ignore_uploads: bool,
     /// If uploads are ignored
     pub is_paired: bool,

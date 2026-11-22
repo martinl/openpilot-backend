@@ -130,12 +130,13 @@ pub struct DeviceConnection {
     pub command_queue: Vec<JsonRpcRequest>,
 }
 
+pub type CloudlogCache = HashMap<String, HashMap<String, HashMap<String, Vec<serde_json::Value>>>>;
+
 pub struct ConnectionManager {
     pub devices: Mutex<HashMap<String, DeviceConnection>>,
     pub clients: Mutex<HashMap<String, tokio::sync::mpsc::Sender<JsonRpcResponse>>>,
     // branch -> module -> Vec<serde_json::Value>
-    pub cloudlog_cache:
-        RwLock<HashMap<String, HashMap<String, HashMap<String, Vec<serde_json::Value>>>>>,
+    pub cloudlog_cache: RwLock<CloudlogCache>,
 }
 
 impl ConnectionManager {
@@ -375,10 +376,10 @@ async fn handle_socket(
                                             // Parse logs using a streaming deserializer.
                                             let mut parsed_logs = Vec::new();
                                             let mut had_parse_errors = false;
-                                            let mut stream =
-                                                serde_json::Deserializer::from_str(&logs_str)
+                                            let stream =
+                                                serde_json::Deserializer::from_str(logs_str)
                                                     .into_iter::<serde_json::Value>();
-                                            while let Some(result) = stream.next() {
+                                            for result in stream {
                                                 match result {
                                                     Ok(log) => parsed_logs.push(log),
                                                     Err(e) => {

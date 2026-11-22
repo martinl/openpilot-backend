@@ -133,21 +133,19 @@ where
 
                 let valid_token_data = jwt_processor
                     .validate_pem(&token, device.public_key.as_bytes())
-                    .map_err(|e| {
-                        handle_unauth(parts, &format!("Got invalid token: {}", e.to_string()))
-                    })?;
+                    .map_err(|e| handle_unauth(parts, &format!("Got invalid token: {}", e)))?;
 
-                return Ok(Self {
+                Ok(Self {
                     claims: valid_token_data.claims,
                     device_model: Some(device),
                     user_model: None,
-                });
+                })
             }
             Algorithm::HS256 | Algorithm::HS384 | Algorithm::HS512 => {
                 // the server issues these to devices and users
-                let valid_token_data = jwt_processor.validate(&token).map_err(|e| {
-                    handle_unauth(parts, &format!("Got invalid token: {}", e.to_string()))
-                })?;
+                let valid_token_data = jwt_processor
+                    .validate(&token)
+                    .map_err(|e| handle_unauth(parts, &format!("Got invalid token: {}", e)))?;
 
                 let (user_model, device_model) = tokio::join!(
                     UM::find_by_identity(&ctx.db, identity),
@@ -159,18 +157,16 @@ where
                     panic!(); // should never get here
                 }
 
-                return Ok(Self {
+                Ok(Self {
                     claims: valid_token_data.claims,
                     user_model: user_model.ok(),
                     device_model: device_model.ok(),
-                });
+                })
             }
-            _ => {
-                return Err(handle_unauth(
-                    parts,
-                    "Must use RS or HS or ES jwt algorithm",
-                ))
-            }
+            _ => Err(handle_unauth(
+                parts,
+                "Must use RS or HS or ES jwt algorithm",
+            )),
         }
     }
 }
@@ -186,10 +182,10 @@ fn handle_jwt_err(parts: &mut Parts, error_kind: &ErrorKind) -> AuthError {
 
     if parts[0] == "useradmin" {
         // Redirect for useradmin subdomain
-        return AuthError::RedirectToLogin;
+        AuthError::RedirectToLogin
     } else {
         // Return JWTError with the ErrorKind
-        return AuthError::JWTError(error_kind.clone());
+        AuthError::JWTError(error_kind.clone())
     }
 }
 
@@ -204,10 +200,10 @@ fn handle_unauth(parts: &mut Parts, msg: &str) -> AuthError {
 
     if parts[0] == "useradmin" {
         // Redirect for useradmin subdomain
-        return AuthError::RedirectToLogin;
+        AuthError::RedirectToLogin
     } else {
         // Return JWTError with the ErrorKind
-        return AuthError::Unauthorized(msg.to_string());
+        AuthError::Unauthorized(msg.to_string())
     }
 }
 

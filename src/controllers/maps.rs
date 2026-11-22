@@ -59,7 +59,7 @@ static GLOBAL_MONTHLY_LIMITER: Lazy<Arc<DefaultDirectRateLimiter>> = Lazy::new(|
 });
 
 static USER_LIMITERS: Lazy<DashMap<String, Arc<DefaultDirectRateLimiter>>> =
-    Lazy::new(|| DashMap::new());
+    Lazy::new(DashMap::new);
 
 fn build_user_limiter() -> DefaultDirectRateLimiter {
     DefaultDirectRateLimiter::new(
@@ -171,7 +171,7 @@ pub async fn proxy_mapbox(
 
     let updated_query = serde_urlencoded::to_string(&query_params).unwrap();
     if !updated_query.is_empty() {
-        mapbox_url.push_str("?");
+        mapbox_url.push('?');
         mapbox_url.push_str(&updated_query);
     }
     tracing::debug!("the mapbox url is: {}", mapbox_url);

@@ -166,7 +166,7 @@ pub async fn ensure_user_is_owner(
     // If the request comes from a user, check their permissions
     if let Some(user_model) = &auth.user_model {
         if !user_model.superuser {
-            DM::ensure_user_device(&db, user_model.id, &dongle_id)
+            DM::ensure_user_device(db, user_model.id, dongle_id)
                 .await
                 .map_err(|_| (StatusCode::UNAUTHORIZED, "You are not the owner"))?;
         }
@@ -339,12 +339,14 @@ async fn delete_route(
             .to_string(); // Convert to string for independent ownership
         let file_url = mkv_helpers::get_mkv_file_url(&file_name);
 
-        let _ = client.delete(&file_url).send().await.map_err(|e| {
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
-        });
+        let _ = client
+            .delete(&file_url)
+            .send()
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response());
     }
 
-    return Ok((StatusCode::OK, format!("Deleted {} files", keys.len())).into_response());
+    Ok((StatusCode::OK, format!("Deleted {} files", keys.len())).into_response())
 }
 
 async fn delete_data(
@@ -396,14 +398,16 @@ async fn delete_data(
             .to_string(); // Convert to string for independent ownership
         let file_url = mkv_helpers::get_mkv_file_url(&file_name);
 
-        let _ = client.delete(&file_url).send().await.map_err(|e| {
-            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
-        });
+        let _ = client
+            .delete(&file_url)
+            .send()
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response());
     }
     // We cant delete the device model but we still want to delete all the routes and segments. We want to keep the device in the db so it can
     // be used for the new customer that pairs the device.
     RM::delete_device_routes(&ctx.db, &dongle_id).await?;
-    return Ok((StatusCode::OK, format!("Deleted {} files", keys.len())).into_response());
+    Ok((StatusCode::OK, format!("Deleted {} files", keys.len())).into_response())
 }
 
 #[derive(Deserialize)]
@@ -461,16 +465,16 @@ async fn get_cloudlog_cache(
                         "Failed to serialize cloudlogs",
                     )
                 })?;
-                return Ok((
+                Ok((
                     StatusCode::OK,
                     [("Content-Type", "application/json")],
                     json_bytes,
-                ));
+                ))
             } else {
-                return Err((
+                Err((
                     StatusCode::NOT_FOUND,
                     "No logs found for the specified branch/module",
-                ));
+                ))
             }
         } else {
             // If branch or module is not provided, return a summary structure.
@@ -485,11 +489,11 @@ async fn get_cloudlog_cache(
                     "Failed to serialize summary",
                 )
             })?;
-            return Ok((
+            Ok((
                 StatusCode::OK,
                 [("Content-Type", "application/json")],
                 json_bytes,
-            ));
+            ))
         }
     } else {
         Err((
@@ -544,7 +548,7 @@ pub async fn get_all_cloudlogs(
     let is_frogai = auth
         .user_model
         .as_ref()
-        .map_or(false, |u| u.identity == frogai_id);
+        .is_some_and(|u| u.identity == frogai_id);
     if let Some(user_model) = &auth.user_model {
         if is_frogai {
             if let Some(ref filter_branch) = query.branch {
@@ -626,10 +630,8 @@ pub async fn get_all_cloudlogs(
                                     }
                                     _ => continue,
                                 }
-                            } else {
-                                if levelnum != filter_levelnum {
-                                    continue;
-                                }
+                            } else if levelnum != filter_levelnum {
+                                continue;
                             }
                         } else {
                             continue;

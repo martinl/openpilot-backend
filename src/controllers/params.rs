@@ -103,8 +103,7 @@ pub async fn get_params_metrics(
                                     .as_str()
                                     .map(|s| s.to_string())
                                     .unwrap_or_else(|| val.to_string());
-                                let entry =
-                                    result.entry(param.clone()).or_insert_with(HashMap::new);
+                                let entry = result.entry(param.clone()).or_default();
                                 *entry.entry(val_str).or_insert(0) += 1;
                             }
                         }

@@ -62,12 +62,12 @@ impl DMQM {
 
     pub async fn insert_msg(
         db: &DatabaseConnection,
-        dongle_id: &String,
+        dongle_id: &str,
         json_rpc_request: JsonRpcRequest,
     ) -> Result<(), DbErr> {
         // Create a new active model to insert into the database
         let new_msg = ActiveModel {
-            dongle_id: ActiveValue::Set(dongle_id.clone()),
+            dongle_id: ActiveValue::Set(dongle_id.to_owned()),
             json_rpc_request: ActiveValue::Set(
                 serde_json::to_value(json_rpc_request).unwrap_or_default(),
             ),

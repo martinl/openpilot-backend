@@ -131,7 +131,7 @@ impl Task for Deleter {
 async fn delete_file(client: &Client, file_name: &str) {
     tracing::info!("Deleting file: {file_name}");
     client
-        .delete(&mkv_helpers::get_mkv_file_url(file_name))
+        .delete(mkv_helpers::get_mkv_file_url(file_name))
         .send()
         .await
         .unwrap();

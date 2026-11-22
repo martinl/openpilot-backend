@@ -79,7 +79,7 @@ impl DM {
     pub async fn register_device(
         db: &DatabaseConnection,
         params: DeviceRegistrationParams,
-        dongle_id: &String,
+        dongle_id: &str,
     ) -> ModelResult<()> {
         // Check if the device is registered already
         match DM::find_device(db, dongle_id).await {
@@ -88,7 +88,7 @@ impl DM {
                 // Add device to db
                 let txn = db.begin().await?;
                 let device = DM {
-                    dongle_id: dongle_id.clone(),
+                    dongle_id: dongle_id.to_owned(),
                     public_key: params.public_key,
                     imei: params.imei,
                     imei2: params.imei2,

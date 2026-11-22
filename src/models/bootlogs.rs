@@ -27,10 +27,10 @@ impl ActiveModelBehavior for ActiveModel {
 impl BM {
     pub async fn add_bootlog(
         db: &DatabaseConnection,
-        dongle_id: &String,
-        bootlog_download_url: &String,
-        unlog_url: &String,
-        date_time: &String,
+        dongle_id: &str,
+        bootlog_download_url: &str,
+        unlog_url: &str,
+        date_time: &str,
     ) -> ModelResult<Self> {
         let txn = match db.begin().await {
             Ok(txn) => {
@@ -43,10 +43,10 @@ impl BM {
             }
         };
         let bootlog = ActiveModel {
-            dongle_id: ActiveValue::Set(dongle_id.clone()),
-            bootlog_url: ActiveValue::Set(bootlog_download_url.clone()),
-            unlog_url: ActiveValue::Set(unlog_url.clone()),
-            date_time: ActiveValue::Set(date_time.clone()),
+            dongle_id: ActiveValue::Set(dongle_id.to_owned()),
+            bootlog_url: ActiveValue::Set(bootlog_download_url.to_owned()),
+            unlog_url: ActiveValue::Set(unlog_url.to_owned()),
+            date_time: ActiveValue::Set(date_time.to_owned()),
             ..Default::default()
         }
         .insert(&txn)
@@ -55,13 +55,13 @@ impl BM {
             Ok(bootlog) => {
                 tracing::debug!("Bootlog Added to database");
                 txn.commit().await?;
-                return Ok(bootlog);
+                Ok(bootlog)
             }
             Err(e) => {
                 tracing::error!("Failed to add bootlog to database: {:?}", e);
-                return Err(e.into());
+                Err(e.into())
             }
-        };
+        }
     }
 
     pub async fn find_device_bootlogs(

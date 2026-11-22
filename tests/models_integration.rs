@@ -289,9 +289,9 @@ async fn routes_segments_bootlogs_anonlogs_and_msg_queues_crud() {
     BM::add_bootlog(
         &db,
         &dongle_id,
-        &"https://api/boot.bz2".to_string(),
-        &"https://api/boot.unlog".to_string(),
-        &"2024-02-05--16-22-28".to_string(),
+        "https://api/boot.bz2",
+        "https://api/boot.unlog",
+        "2024-02-05--16-22-28",
     )
     .await
     .unwrap();
