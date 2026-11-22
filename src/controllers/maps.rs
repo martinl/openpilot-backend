@@ -213,3 +213,32 @@ pub async fn proxy_mapbox(
 
     Ok(response)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_response_maps_to_expected_http_statuses() {
+        assert_eq!(
+            ErrorResponse::UpstreamError("timeout".into())
+                .into_response()
+                .status(),
+            StatusCode::BAD_GATEWAY
+        );
+        assert_eq!(
+            ErrorResponse::Unauthorized.into_response().status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            ErrorResponse::InternalServerError.into_response().status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test]
+    fn user_rate_limiter_allows_initial_requests() {
+        let limiter = build_user_limiter();
+        assert!(limiter.check().is_ok());
+    }
+}

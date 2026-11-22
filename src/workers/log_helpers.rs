@@ -136,3 +136,57 @@ pub async fn persist_device_params(
     try_join_all(tasks).await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use serial_test::serial;
+
+    use super::*;
+
+    #[test]
+    fn haversine_distance_computes_zero_and_known_city_distances() {
+        assert!((haversine_distance(59.437, 24.7536, 59.437, 24.7536)).abs() < 1e-6);
+
+        // ~1 degree of latitude is ~111.195 km
+        let one_deg = haversine_distance(0.0, 0.0, 1.0, 0.0);
+        assert!((one_deg - 111_195.0).abs() < 500.0, "got {one_deg}");
+
+        // Tallinn to Helsinki is ~82 km
+        let tal_hel = haversine_distance(59.437, 24.7536, 60.1699, 24.9384);
+        assert!(tal_hel > 75_000.0 && tal_hel < 90_000.0, "got {tal_hel}");
+    }
+
+    #[test]
+    fn advisory_lock_key_is_deterministic() {
+        let k1 = calculate_advisory_lock_key("1d3dc3e03047b0c7|2024-02-05--16-22-28");
+        let k2 = calculate_advisory_lock_key("1d3dc3e03047b0c7|2024-02-05--16-22-28");
+        let k3 = calculate_advisory_lock_key("1d3dc3e03047b0c7|2024-02-06--16-22-28");
+        assert_eq!(k1, k2);
+        assert_ne!(k1, k3);
+    }
+
+    #[test]
+    #[serial]
+    fn increment_param_value_and_save_device_param_update_in_memory_maps() {
+        PARAM_COUNTS.clear();
+        DEVICE_PARAMS.clear();
+
+        increment_param_value("CarModel", "HONDA CIVIC");
+        increment_param_value("CarModel", "HONDA CIVIC");
+        increment_param_value("CarModel", "TOYOTA COROLLA");
+
+        let counts = PARAM_COUNTS.get("CarModel").unwrap();
+        assert_eq!(*counts.get("HONDA CIVIC").unwrap(), 2);
+        assert_eq!(*counts.get("TOYOTA COROLLA").unwrap(), 1);
+        drop(counts);
+
+        save_device_param("aaaaaaaaaaaaaaaa", "GitBranch", "release");
+        save_device_param("aaaaaaaaaaaaaaaa", "GitBranch", "master");
+        let dev = DEVICE_PARAMS.get("aaaaaaaaaaaaaaaa").unwrap();
+        assert_eq!(dev.get("GitBranch").unwrap().as_str(), "master");
+        drop(dev);
+
+        PARAM_COUNTS.clear();
+        DEVICE_PARAMS.clear();
+    }
+}
