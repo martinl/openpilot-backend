@@ -473,12 +473,24 @@ pub mod controller {
 
         pub(super) fn join_path(prefix: Option<&str>, uri: &str) -> String {
             let p = prefix.unwrap_or("").trim_matches('/');
-            let u = uri.trim_matches('/');
+            let u = uri.trim_end_matches('/');
             match (p.is_empty(), u.is_empty()) {
                 (true, true) => "/".to_string(),
-                (true, false) => format!("/{u}"),
+                (true, false) => {
+                    if u.starts_with('/') {
+                        u.to_string()
+                    } else {
+                        format!("/{u}")
+                    }
+                }
                 (false, true) => format!("/{p}"),
-                (false, false) => format!("/{p}/{u}"),
+                (false, false) => {
+                    if u.starts_with('/') || u.starts_with('.') {
+                        format!("/{p}{u}")
+                    } else {
+                        format!("/{p}/{u}")
+                    }
+                }
             }
         }
 
@@ -1019,6 +1031,14 @@ mod tests {
         assert_eq!(
             controller::Routes::join_path(Some("/connectdata/"), "/{id}/coords.json/"),
             "/connectdata/{id}/coords.json"
+        );
+        assert_eq!(
+            controller::Routes::join_path(Some("v1"), ".1/devices/{dongle_id}"),
+            "/v1.1/devices/{dongle_id}"
+        );
+        assert_eq!(
+            controller::Routes::join_path(Some("v1"), ".4/{dongleId}/upload_url/"),
+            "/v1.4/{dongleId}/upload_url"
         );
     }
 
