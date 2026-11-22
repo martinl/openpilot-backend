@@ -291,8 +291,16 @@ async fn comma_openapi_response_contracts() {
         is_preserved: true,
         start_time_utc_millis: 1_707_150_148_000,
         end_time_utc_millis: 1_707_150_208_000,
+        start_time: chrono::DateTime::from_timestamp(1_707_150_148, 0).map(|dt| dt.naive_utc()),
+        end_time: chrono::DateTime::from_timestamp(1_707_150_208, 0).map(|dt| dt.naive_utc()),
         end_lat: 59.437,
         end_lng: 24.7536,
+        devicetype: Some(7),
+        git_branch: Some("master".into()),
+        git_commit: Some("abc1234".into()),
+        git_dirty: Some(false),
+        git_remote: Some("https://github.com/commaai/openpilot".into()),
+        version: Some("0.9.7".into()),
         maxqlog: 0,
         maxqcamera: 0,
         ..Default::default()
@@ -350,6 +358,36 @@ async fn comma_openapi_response_contracts() {
         ),
         (
             Method::GET,
+            format!("/v1/devices/{dongle_id}/routes"),
+            "/v1/devices/{dongleId}/routes",
+            None,
+        ),
+        (
+            Method::GET,
+            format!("/v1/devices/{dongle_id}/routes_segments"),
+            "/v1/devices/{dongleId}/routes_segments",
+            None,
+        ),
+        (
+            Method::GET,
+            format!("/v1/devices/{dongle_id}/routes/preserved"),
+            "/v1/devices/{dongleId}/routes/preserved",
+            None,
+        ),
+        (
+            Method::GET,
+            format!("/v1/route/{fullname}"),
+            "/v1/route/{routeName}",
+            None,
+        ),
+        (
+            Method::PATCH,
+            format!("/v1/route/{fullname}"),
+            "/v1/route/{routeName}",
+            Some(json!({ "is_public": true })),
+        ),
+        (
+            Method::GET,
             format!("/v1/route/{fullname}/files"),
             "/v1/route/{routeName}/files",
             None,
@@ -375,7 +413,95 @@ async fn comma_openapi_response_contracts() {
                 "expiry_days": 1
             })),
         ),
+        (
+            Method::PATCH,
+            format!("/v1/devices/{dongle_id}"),
+            "/v1/devices/{dongleId}",
+            Some(json!({ "alias": "Updated C3X" })),
+        ),
+        (
+            Method::POST,
+            format!("/v1/navigation/{dongle_id}/set_destination"),
+            "/v1/navigation/{dongleId}/set_destination",
+            Some(json!({
+                "latitude": 59.437,
+                "longitude": 24.7536,
+                "place_name": "Tallinn",
+                "place_details": "Estonia"
+            })),
+        ),
+        (
+            Method::GET,
+            format!("/v1/navigation/{dongle_id}/next"),
+            "/v1/navigation/{dongleId}/next",
+            None,
+        ),
+        (
+            Method::PUT,
+            format!("/v1/navigation/{dongle_id}/locations"),
+            "/v1/navigation/{dongleId}/locations",
+            Some(json!({
+                "place_name": "Home",
+                "place_details": "123 Main St",
+                "latitude": 59.437,
+                "longitude": 24.7536,
+                "save_type": "favorite",
+                "label": "Home"
+            })),
+        ),
+        (
+            Method::GET,
+            format!("/v1/navigation/{dongle_id}/locations"),
+            "/v1/navigation/{dongleId}/locations",
+            None,
+        ),
+        (
+            Method::DELETE,
+            format!("/v1/navigation/{dongle_id}/next"),
+            "/v1/navigation/{dongleId}/next",
+            None,
+        ),
+        (
+            Method::POST,
+            "/v2/pilotauth?imei=111111111111111&imei2=222222222222222&serial=ser-oa&public_key=pub-oa&register_token=not-a-jwt".into(),
+            "/v2/pilotauth",
+            None,
+        ),
+        (
+            Method::POST,
+            format!("/v1/devices/{dongle_id}/unpair"),
+            "/v1/devices/{dongleId}/unpair",
+            None,
+        ),
     ];
+
+    // Documented intentional/legacy divergences between openpilot-backend and
+    // upstream api.comma.ai (any *other* violation fails the contract test):
+    // - Route models do not have a `share_expiry` DB column, and store
+    //   `start_time`/`end_time` as ISO-8601 strings (whereas comma's spec types
+    //   them as numbers, and frontend accepts `string | number | null`).
+    // - Saved navigation locations use UUID strings for `id` instead of numbers.
+    // - `POST /v1/devices/{dongleId}/unpair` returns boolean `success` instead of 0/1.
+    let is_known_divergence = |openapi_path: &str, err: &str| -> bool {
+        if openapi_path.contains("route")
+            && (err.contains("missing required property `share_expiry`")
+                || err.contains(".start_time: expected type \"number\"")
+                || err.contains(".end_time: expected type \"number\""))
+        {
+            return true;
+        }
+        if openapi_path == "/v1/navigation/{dongleId}/locations"
+            && err.contains(".id: expected type \"number\"")
+        {
+            return true;
+        }
+        if openapi_path == "/v1/devices/{dongleId}/unpair"
+            && err.contains("$.success: expected type \"integer\"")
+        {
+            return true;
+        }
+        false
+    };
 
     let mut all_violations = Vec::new();
     for (method, uri, openapi_path, payload) in checks {
@@ -395,13 +521,16 @@ async fn comma_openapi_response_contracts() {
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let json: Value = serde_json::from_slice(&bytes)
             .unwrap_or_else(|e| panic!("invalid JSON from {method} {uri}: {e}"));
-        let errs = check_matches_openapi(
+        let errs: Vec<String> = check_matches_openapi(
             &spec,
             method.as_str().to_ascii_lowercase().as_str(),
             openapi_path,
             status,
             &json,
-        );
+        )
+        .into_iter()
+        .filter(|e| !is_known_divergence(openapi_path, e))
+        .collect();
         if !errs.is_empty() {
             all_violations.push(format!(
                 "{} {}:\n  - {}",
