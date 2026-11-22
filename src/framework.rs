@@ -1183,4 +1183,50 @@ mod tests {
             None => env::remove_var("SERVER_SECRET"),
         }
     }
+
+    struct DummyTask;
+    #[async_trait::async_trait]
+    impl task::Task for DummyTask {
+        fn task(&self) -> task::TaskInfo {
+            task::TaskInfo {
+                name: "dummy".into(),
+                detail: "test task".into(),
+            }
+        }
+
+        async fn run(&self, _ctx: &app::AppContext, vars: &task::Vars) -> Result<()> {
+            let _ = vars.cli_arg("ok")?;
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn tasks_registry_lists_runs_and_reports_missing_tasks() {
+        let mut tasks = task::Tasks::default();
+        tasks.register(DummyTask);
+        let list = tasks.list();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "dummy");
+
+        let ctx = app::AppContext {
+            environment: environment::Environment::Test,
+            db: sea_orm::DatabaseConnection::Disconnected,
+            config: config::Config {
+                jwt: config::JWTConfig {
+                    secret: "AAAAAAAAAAAAAAAAAAAA".into(),
+                    expiration: 60,
+                },
+                port: 3112,
+                binding: "127.0.0.1".into(),
+            },
+            storage: Arc::new(storage::Storage::single(())),
+        };
+
+        let ok_vars = task::Vars::from_args(&["ok:1".to_string()]);
+        assert!(tasks.run("dummy", &ctx, &ok_vars).await.is_ok());
+
+        let bad_vars = task::Vars::default();
+        assert!(tasks.run("dummy", &ctx, &bad_vars).await.is_err());
+        assert!(tasks.run("unknown", &ctx, &ok_vars).await.is_err());
+    }
 }

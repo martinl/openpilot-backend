@@ -1,6 +1,5 @@
 **/config/local.yaml
 **/config/*.local.yaml
-/tests
 .env
 venv/
 cert.pem
