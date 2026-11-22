@@ -46,8 +46,7 @@ impl Task for SeedFromMkv {
         ];
         let mut keys = Vec::with_capacity(1000);
         if let Some(dongle_id_filter) = dongle_id_filter {
-            let query =
-                common::mkv_helpers::list_keys_starting_with(&format!("{}", dongle_id_filter));
+            let query = common::mkv_helpers::list_keys_starting_with(&dongle_id_filter.to_string());
             let response = client.get(&query).send().await.unwrap();
 
             if !response.status().is_success() {
@@ -93,6 +92,8 @@ impl Task for SeedFromMkv {
         let segment_file_regex_string =
             format!(r"^({DONGLE_ID})_({ROUTE_NAME})--({NUMBER})--({ALLOWED_FILENAME}$)");
         let re = regex::Regex::new(&segment_file_regex_string).unwrap();
+        let _re_boot_log =
+            regex::Regex::new(r"^([0-9a-z]{16})_([0-9a-z]{8}--[0-9a-z]{10}.bz2$)").unwrap();
         for key_value in keys {
             progress_bar.inc(1);
             let file_name = key_value
@@ -112,7 +113,7 @@ impl Task for SeedFromMkv {
                         continue;
                     }
 
-                    if timestamp_filter.map_or(false, |filter| filter != &timestamp) {
+                    if timestamp_filter.is_some_and(|filter| filter != &timestamp) {
                         continue;
                     }
 
@@ -161,7 +162,7 @@ impl Task for SeedFromMkv {
                     let internal_url = common::mkv_helpers::get_mkv_file_url(&file_name);
 
                     let result = LogSegmentWorker::perform_later(
-                        &app_context,
+                        app_context,
                         LogSegmentWorkerArgs {
                             internal_file_url: internal_url,
                             dongle_id: dongle_id.to_string(),
@@ -189,10 +190,7 @@ impl Task for SeedFromMkv {
                 None => {
                     continue;
 
-                    let re_boot_log =
-                        regex::Regex::new(r"^([0-9a-z]{16})_([0-9a-z]{8}--[0-9a-z]{10}.bz2$)")
-                            .unwrap();
-                    match re_boot_log.captures(&file_name) {
+                    match _re_boot_log.captures(&file_name) {
                         Some(caps) => {
                             let dongle_id = &caps[1];
                             let file = &caps[2];
@@ -206,7 +204,7 @@ impl Task for SeedFromMkv {
                                 .await
                                 .unwrap();
                             let _result = BootlogParserWorker::perform_later(
-                                &app_context,
+                                app_context,
                                 BootlogParserWorkerArgs {
                                     internal_file_url: internal_file_url.clone(),
                                     dongle_id: dongle_id.into(),

@@ -68,7 +68,7 @@ impl JWT {
         #[allow(clippy::cast_possible_truncation)]
         let exp = (get_current_timestamp() + expiration) as usize;
         let nbf = get_current_timestamp() as usize;
-        let iat = nbf.clone();
+        let iat = nbf;
         let claims = UserClaims {
             identity,
             exp,

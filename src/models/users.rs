@@ -120,7 +120,7 @@ impl super::_entities::users::Model {
                     return Ok(user);
                 }
                 txn.commit().await?;
-                return Ok(user);
+                Ok(user)
             }
             None => {
                 let user = users::ActiveModel {

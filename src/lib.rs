@@ -1,5 +1,6 @@
 pub mod app;
 #[rustfmt::skip]
+#[allow(clippy::extra_unused_type_parameters)]
 pub mod cereal;
 pub mod common;
 pub mod controllers;

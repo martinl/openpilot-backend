@@ -117,7 +117,11 @@ impl Hooks for App {
 
     async fn after_context(ctx: AppContext) -> Result<AppContext> {
         Ok(AppContext {
-            storage: storage::Storage::single(storage::drivers::local::new()).into(),
+            storage: {
+                storage::drivers::local::new();
+                storage::Storage::single(())
+            }
+            .into(),
             ..ctx
         })
     }

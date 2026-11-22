@@ -37,9 +37,7 @@ pub fn calculate_advisory_lock_key(canonical_name: &str) -> u32 {
 }
 
 pub fn increment_param_value(param_name: &str, value: &str) {
-    let value_counts = PARAM_COUNTS
-        .entry(param_name.to_string())
-        .or_insert_with(DashMap::new);
+    let value_counts = PARAM_COUNTS.entry(param_name.to_string()).or_default();
     value_counts
         .entry(value.to_string())
         .and_modify(|count| *count += 1)
@@ -103,9 +101,7 @@ pub async fn persist_param_value_counts(
 }
 
 pub fn save_device_param(device_id: &str, param_name: &str, value: &str) {
-    let device_map = DEVICE_PARAMS
-        .entry(device_id.to_string())
-        .or_insert_with(DashMap::new);
+    let device_map = DEVICE_PARAMS.entry(device_id.to_string()).or_default();
     device_map.insert(param_name.to_string(), value.to_string());
 }
 

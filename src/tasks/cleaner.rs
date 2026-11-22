@@ -46,7 +46,7 @@ impl Task for Cleaner {
 
                 // check the length of each route
                 for route in routes {
-                    if (route.length < 0.1 && route.hpgps == true) || (route.can == false) {
+                    if (route.length < 0.1 && route.hpgps) || (!route.can) {
                         let query = mkv_helpers::list_keys_starting_with(&route.fullname);
                         let response = client.get(&query).send().await.unwrap();
                         if !response.status().is_success() {
@@ -74,7 +74,7 @@ impl Task for Cleaner {
 async fn delete_file(client: &Client, file_name: &str) {
     tracing::info!("Deleting file: {file_name}");
     client
-        .delete(&mkv_helpers::get_mkv_file_url(file_name))
+        .delete(mkv_helpers::get_mkv_file_url(file_name))
         .send()
         .await
         .unwrap();

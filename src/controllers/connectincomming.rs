@@ -116,7 +116,7 @@ pub async fn upload_bootlogs(
             match status {
                 StatusCode::FORBIDDEN => {
                     tracing::error!("Duplicate file uploaded");
-                    return Ok((status, "Duplicate File Upload"));
+                    Ok((status, "Duplicate File Upload"))
                 }
                 StatusCode::CREATED | StatusCode::OK => {
                     if let Some(device) = auth.device_model {
@@ -140,7 +140,7 @@ pub async fn upload_bootlogs(
                         &ctx,
                         BootlogParserWorkerArgs {
                             internal_file_url: full_url.clone(),
-                            dongle_id: dongle_id,
+                            dongle_id,
                             file_name: file,
                             create_time: SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
@@ -153,26 +153,23 @@ pub async fn upload_bootlogs(
                         // sorry this is kinda confusing
                         Ok(_) => {
                             tracing::debug!("Queued Worker");
-                            return Ok((status, "Queued Worker"));
+                            Ok((status, "Queued Worker"))
                         }
                         Err(e) => {
                             tracing::error!("Failed to queue worker: {}", format!("{}", e));
-                            return Ok((
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "Failed to queue worker.",
-                            ));
+                            Ok((StatusCode::INTERNAL_SERVER_ERROR, "Failed to queue worker."))
                         }
                     }
                 }
                 _ => {
                     tracing::error!("Unhandled status {}. File not uploaded.", status);
-                    return Ok((status, "Unhandled status. File not uploaded."));
+                    Ok((status, "Unhandled status. File not uploaded."))
                 }
             }
         }
         Err(e) => {
             tracing::error!("PUT request failed: {}", format!("{}", e));
-            return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong"));
+            Ok((StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong"))
         }
     }
 }
@@ -233,7 +230,7 @@ pub async fn upload_crash(
             match status {
                 StatusCode::FORBIDDEN => {
                     tracing::error!("Duplicate file uploaded");
-                    return Ok((status, "Duplicate File Upload"));
+                    Ok((status, "Duplicate File Upload"))
                 }
                 StatusCode::CREATED | StatusCode::OK => {
                     // Enqueue the file for processing
@@ -253,17 +250,17 @@ pub async fn upload_crash(
                             }
                         }
                     }
-                    return Ok((status, "File uploaded."));
+                    Ok((status, "File uploaded."))
                 }
                 _ => {
                     tracing::error!("Unhandled status. File not uploaded.");
-                    return Ok((status, "Unhandled status. File not uploaded."));
+                    Ok((status, "Unhandled status. File not uploaded."))
                 }
             }
         }
         Err(e) => {
             tracing::error!("PUT request failed: {}", format!("{}", e));
-            return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong"));
+            Ok((StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong"))
         }
     }
 }
@@ -373,10 +370,10 @@ pub async fn upload_driving_logs(
                 &ctx,
                 LogSegmentWorkerArgs {
                     internal_file_url: full_url,
-                    dongle_id: dongle_id,
-                    timestamp: timestamp,
-                    segment: segment,
-                    file: file,
+                    dongle_id,
+                    timestamp,
+                    segment,
+                    file,
                     create_time: SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or_default()
@@ -387,17 +384,17 @@ pub async fn upload_driving_logs(
             match result {
                 Ok(_) => {
                     tracing::debug!("Queued Worker");
-                    return Ok((status, "Queued Worker"));
+                    Ok((status, "Queued Worker"))
                 }
                 Err(e) => {
                     tracing::error!("Failed to queue worker: {}", format!("{}", e));
-                    return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Failed to queue worker."));
+                    Ok((StatusCode::INTERNAL_SERVER_ERROR, "Failed to queue worker."))
                 }
             }
         }
         Err(e) => {
             tracing::error!("PUT request failed: {}", format!("{}", e));
-            return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong"));
+            Ok((StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong"))
         }
     }
 }

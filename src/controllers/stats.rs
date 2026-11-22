@@ -90,15 +90,15 @@ pub async fn get_server_usage(
     let utc_time_now_millis = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs() as u64;
+        .as_secs();
     let one_day_ago_millis =
-        utc_time_now_millis - std::time::Duration::from_secs(24 * 60 * 60).as_secs() as u64;
+        utc_time_now_millis - std::time::Duration::from_secs(24 * 60 * 60).as_secs();
     let one_week_ago_millis =
-        utc_time_now_millis - std::time::Duration::from_secs(7 * 24 * 60 * 60).as_secs() as u64;
+        utc_time_now_millis - std::time::Duration::from_secs(7 * 24 * 60 * 60).as_secs();
     let one_month_ago_millis =
-        utc_time_now_millis - std::time::Duration::from_secs(30 * 24 * 60 * 60).as_secs() as u64;
+        utc_time_now_millis - std::time::Duration::from_secs(30 * 24 * 60 * 60).as_secs();
     let three_months_ago_millis =
-        utc_time_now_millis - std::time::Duration::from_secs(90 * 24 * 60 * 60).as_secs() as u64;
+        utc_time_now_millis - std::time::Duration::from_secs(90 * 24 * 60 * 60).as_secs();
 
     // All-time daily miles (sum of route length per UTC day)
     let daily_miles_rows = RM::daily_miles_all_time(&ctx.db).await.unwrap_or_default();
@@ -143,17 +143,14 @@ pub async fn get_server_usage(
                 .unwrap_or_else(|| chrono::Utc.timestamp_millis_opt(0).unwrap())
                 .format("%Y-%m-%d")
                 .to_string();
-            TimeSeriesPoint {
-                date,
-                miles: *cnt as i64,
-            }
+            TimeSeriesPoint { date, miles: *cnt }
         })
         .collect();
     let mut cumulative_devices_points: Vec<TimeSeriesPoint> =
         Vec::with_capacity(daily_reg_rows.len());
     let mut acc_dev: i64 = 0;
     for (day_ms, cnt) in &daily_reg_rows {
-        acc_dev += *cnt as i64;
+        acc_dev += *cnt;
         let date = chrono::Utc
             .timestamp_millis_opt(*day_ms)
             .single()

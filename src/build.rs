@@ -21,13 +21,13 @@ fn main() -> io::Result<()> {
     }
 
     // Ensure the output directory exists
-    create_dir_all(&out_dir)?;
+    create_dir_all(out_dir)?;
 
     // Create CompilerCommand using a loop to add all files
     let mut command = capnpc::CompilerCommand::new();
-    command.src_prefix(&src_prefix).output_path(&out_dir);
+    command.src_prefix(src_prefix).output_path(out_dir);
     for file in &capnp_files {
-        let file_path = format!("{}/{}", &src_prefix, file);
+        let file_path = format!("{}/{}", src_prefix, file);
         if !Path::new(&file_path).exists() {
             eprintln!("Error: File not found: {}", file_path);
             return Err(io::Error::new(
@@ -86,16 +86,10 @@ fn main() -> io::Result<()> {
                         if let Some(first) = enum_variant.get_mut(0..1) {
                             first.make_ascii_uppercase();
                         }
-                        // Handle DEPRECATED fields (keep as is)
-                        let variant = if enum_variant.ends_with("DEPRECATED") {
-                            enum_variant.clone()
-                        } else {
-                            enum_variant.clone()
-                        };
                         // Output: LogEvent::Which::Variant(_) => "fieldName",
                         match_arms.push(format!(
                             "        LogEvent::Which::{}(_) => \"{}\",",
-                            variant, field_name
+                            enum_variant, field_name
                         ));
                     }
                 }

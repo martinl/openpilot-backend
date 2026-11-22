@@ -132,7 +132,7 @@ impl ExpiryValidation for UploadUrlQuery {
     fn validate_expiry(&mut self) {
         match self.expiry_days {
             Some(days) => {
-                if !(days >= 1 && days <= 30) {
+                if !(1..=30).contains(&days) {
                     self.expiry_days = Some(30);
                 }
             }
@@ -147,7 +147,7 @@ impl ExpiryValidation for UploadUrlsQuery {
     fn validate_expiry(&mut self) {
         match self.expiry_days {
             Some(days) => {
-                if !(days >= 1 && days <= 30) {
+                if !(1..=30).contains(&days) {
                     self.expiry_days = Some(30);
                 }
             }
@@ -178,7 +178,7 @@ pub async fn get_route_files(
     // Do not need to check for data ownership because its done when you try to fetch the data
     let jwt_secret = ctx.config.get_jwt_config()?;
     if let Ok(token) = jwt::JWT::new(&jwt_secret.secret)
-        .generate_token(&(3600 * 24 as u64), auth.claims.identity.to_string())
+        .generate_token(&(3600 * 24_u64), auth.claims.identity.to_string())
     {
         println!("Fetching files for Route ID: {}", route_id);
         let response = get_links_for_route(&route_id, &client, &token).await;
@@ -187,7 +187,7 @@ pub async fn get_route_files(
             Err(_) => unauthorized("err"),
         }
     } else {
-        return unauthorized("err");
+        unauthorized("err")
     }
 }
 
@@ -211,7 +211,7 @@ where
         _ => false,
     });
     segment_models.sort_by(|a, b| a.number.cmp(&b.number));
-    let exp = 3600 * 24 as u64;
+    let exp = 3600 * 24_u64;
     let jwt_secret = ctx.config.get_jwt_config()?;
     let token = jwt::JWT::new(&jwt_secret.secret)
         .generate_token(&exp, auth.claims.identity.to_string())
@@ -280,7 +280,7 @@ async fn get_share_signature(
         .get_jwt_config()
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get secret"))?;
     let token = jwt::JWT::new(&jwt_secret.secret)
-        .generate_token(&(3600 * 24 as u64), auth.claims.identity.to_string())
+        .generate_token(&(3600 * 24_u64), auth.claims.identity.to_string())
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -289,7 +289,7 @@ async fn get_share_signature(
         })?;
 
     let response = ShareSignatureResponse {
-        exp: (get_current_timestamp() + (3600 * 24 as u64)).to_string(),
+        exp: (get_current_timestamp() + (3600 * 24_u64)).to_string(),
         sig: token,
     };
     Ok(format::json(response))
@@ -343,32 +343,32 @@ async fn sort_keys_to_response(keys: Vec<String>) -> FilesResponse {
 
     for key in keys {
         if key.contains("fcamera.hevc") {
-            cameras.push(key.into());
+            cameras.push(key);
             continue;
         } else if key.contains("dcamera.hevc") {
             dcameras.push(key);
             continue;
         } else if key.contains("qcamera.ts") {
-            qcameras.push(key.into());
+            qcameras.push(key);
             continue;
         } else if key.contains("ecameras.hevc") {
-            ecameras.push(key.into());
+            ecameras.push(key);
             continue;
         } else if key.contains("qlog") {
-            qlogs.push(key.into());
+            qlogs.push(key);
             continue;
         } else if key.contains("rlog") {
-            logs.push(key.into());
+            logs.push(key);
             continue;
         }
     }
     FilesResponse {
-        cameras: cameras,
-        dcameras: dcameras,
-        logs: logs,
-        qlogs: qlogs,
-        qcameras: qcameras,
-        ecameras: ecameras,
+        cameras,
+        dcameras,
+        logs,
+        qlogs,
+        qcameras,
+        ecameras,
     }
 }
 
@@ -418,7 +418,7 @@ async fn get_upload_url(
         .get_jwt_config()
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get secrete"))?;
     let token = jwt::JWT::new(&jwt_secret.secret)
-        .generate_token(&(3600 * 24 as u64), device_model.dongle_id.clone())
+        .generate_token(&(3600 * 24_u64), device_model.dongle_id.clone())
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -467,7 +467,7 @@ async fn upload_urls_handler(
         .get_jwt_config()
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get secrete"))?;
     let token = jwt::JWT::new(&jwt_secret.secret)
-        .generate_token(&(3600 * 24 as u64), device_model.dongle_id.clone())
+        .generate_token(&(3600 * 24_u64), device_model.dongle_id.clone())
         .map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -488,7 +488,7 @@ async fn upload_urls_handler(
             ),
         })
         .collect::<Vec<_>>();
-    return Ok(format::json(urls));
+    Ok(format::json(urls))
 }
 
 fn transform_route_string(input_string: &str) -> String {
@@ -598,7 +598,7 @@ async fn device_location(
 
         format::json(response)
     } else {
-        return crate::loco_rs::controller::bad_request("Devices can't do this");
+        crate::loco_rs::controller::bad_request("Devices can't do this")
     }
 }
 
@@ -654,12 +654,10 @@ async fn device_stats(
         if !user_model.superuser {
             DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?; // Returns error if not found
         }
-    } else {
-        if auth.device_model.unwrap().dongle_id != dongle_id {
-            return crate::loco_rs::controller::bad_request(
-                "identity does not match dongle_id in request",
-            );
-        }
+    } else if auth.device_model.unwrap().dongle_id != dongle_id {
+        return crate::loco_rs::controller::bad_request(
+            "identity does not match dongle_id in request",
+        );
     }
     // Get the current time in milliseconds since the UNIX epoch
     let utc_time_now_millis = SystemTime::now()
@@ -723,7 +721,7 @@ async fn device_users(
     if let Some(owner_id) = device_model.owner_id {
         if let Ok(owner) = UM::find_by_id(&ctx.db, owner_id).await {
             users.push(DeviceUser {
-                email: owner.email.unwrap_or_else(|| owner.name),
+                email: owner.email.unwrap_or(owner.name),
                 permission: "owner".to_string(),
             });
         }
@@ -737,7 +735,7 @@ async fn device_users(
     for row in shared_rows {
         if let Ok(shared_user) = UM::find_by_id(&ctx.db, row.user_id).await {
             users.push(DeviceUser {
-                email: shared_user.email.unwrap_or_else(|| shared_user.name),
+                email: shared_user.email.unwrap_or(shared_user.name),
                 permission: row.access_level,
             });
         }
@@ -875,7 +873,7 @@ async fn route_segment(
 
     route_models.retain(|route| route.maxqlog != -1); // exclude ones wher the qlog is missing
 
-    let exp = 3600 * 24 as u64;
+    let exp = 3600 * 24_u64;
     let jwt_secret = ctx.config.get_jwt_config()?;
     let token = jwt::JWT::new(&jwt_secret.secret)
         .generate_token(&exp, auth.claims.identity.to_string())
@@ -951,9 +949,7 @@ async fn get_my_devices(
 ) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
     // TODO: implement authorized devices!
 
-    let user_model = auth
-        .user_model
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, ""))?;
+    let user_model = auth.user_model.ok_or((StatusCode::BAD_REQUEST, ""))?;
     let device_models = if user_model.superuser {
         DM::find_all_devices(&ctx.db).await
     } else {
@@ -999,7 +995,7 @@ async fn get_me(auth: MyJWT, State(ctx): State<AppContext>) -> Result<Response> 
 async fn get_me_jwt(auth: MyJWT, State(ctx): State<AppContext>) -> Result<Response> {
     let jwt_secret = ctx.config.get_jwt_config()?;
     let token = jwt::JWT::new(&jwt_secret.secret)
-        .generate_token(&(3600 * 24 as u64), auth.claims.identity.to_string())
+        .generate_token(&(3600 * 24_u64), auth.claims.identity.to_string())
         .map_err(|_e| crate::loco_rs::Error::Message("Failed to generate JWT token".to_string()))?;
 
     format::json(GenericResponse {
@@ -1130,25 +1126,22 @@ async fn set_destination(
     // Serialize the updated locations back to JSON
     active_device.locations = ActiveValue::Set(Some(serde_json::to_value(locations)?));
 
-    let response;
     // Update the device model in the database
-    match active_device.update(&ctx.db).await {
-        Ok(_) => {
-            response = serde_json::json!({
-                "success": true,
-                "dongle_id": dongle_id,
-            });
-        } // Respond with success
+    let response = match active_device.update(&ctx.db).await {
+        Ok(_) => serde_json::json!({
+            "success": true,
+            "dongle_id": dongle_id,
+        }), // Respond with success
         Err(e) => {
             tracing::error!("Failed to update device locations. DB Error {}", e);
-            response = serde_json::json!({
+            serde_json::json!({
                 //"success": false,
                 "error": true,
                 //"dongle_id": dongle_id,
                 //"saved_next": false
-            });
+            })
         }
-    }
+    };
 
     format::json(response)
 }
@@ -1323,7 +1316,7 @@ async fn get_locations(
 ) -> Result<Response> {
     if let Some(device_model) = auth.device_model {
         let locations = device_model.locations.unwrap_or_default();
-        return Ok((StatusCode::OK, Json(locations)).into_response());
+        Ok((StatusCode::OK, Json(locations)).into_response())
     } else if let Some(user_model) = auth.user_model {
         let device_model = if !user_model.superuser {
             DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?
@@ -1332,9 +1325,9 @@ async fn get_locations(
         };
 
         let locations: Value = device_model.locations.unwrap_or_default();
-        return Ok((StatusCode::OK, Json(locations)).into_response());
+        Ok((StatusCode::OK, Json(locations)).into_response())
     } else {
-        return Ok((StatusCode::NO_CONTENT, format::json("")).into_response());
+        Ok((StatusCode::NO_CONTENT, format::json("")).into_response())
     }
 }
 

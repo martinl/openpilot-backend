@@ -139,7 +139,7 @@ pub async fn onebox_handler(
         } else {
             None
         },
-        onebox: onebox,
+        onebox,
         api_host: api_endpoint,
         ws_host: ws_endpoint,
         frontend_url,
@@ -159,7 +159,7 @@ pub async fn onebox_handler(
     }
 
     // Parse cloudlogs from the connection manager's cache and add them to the template if available.
-    if dongle_id != "" {
+    if !dongle_id.is_empty() {
         // Retrieve the nested logs from the cloudlog cache.
         // Here we assume the cache is stored as:
         // HashMap<String, HashMap<String, HashMap<String, Vec<Value>>>>
@@ -202,7 +202,7 @@ pub async fn onebox_handler(
         });
 
         views::route::admin_route(v, master_template)
-    } else if dongle_id != "" {
+    } else if !dongle_id.is_empty() {
         master_template.routes = Some(RoutesTemplate {
             defined: true,
             routes: RM::find_device_routes(&ctx.db, &dongle_id).await?,
@@ -298,9 +298,7 @@ pub async fn qlog_render(
 
     // Decompress the file
     use futures_util::TryStreamExt;
-    let bytes_stream = response
-        .bytes_stream()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+    let bytes_stream = response.bytes_stream().map_err(std::io::Error::other);
 
     let stream_reader = StreamReader::new(bytes_stream);
 
