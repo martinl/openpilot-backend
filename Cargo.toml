@@ -41,7 +41,7 @@ capnp = "0.19.3"
 futures = "0.3.30"
 async-compression = { version = "0.4.8", features = ["tokio", "bzip2", "zstd"] }
 tokio-util = { version = "0.7.10", features = ["io"] }
-url = "2.5.0"
+url = "2.5.9"
 tower-http = { version = "0.6", features = ["normalize-path", "cors", "fs", "trace", "catch-panic"] }
 tower-layer = "0.3.2"
 futures-util = "0.3.30"
