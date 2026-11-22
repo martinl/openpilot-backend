@@ -454,7 +454,7 @@ async fn v1_and_useradmin_endpoints_end_to_end() {
         .oneshot(
             Request::builder()
                 .method(Method::POST)
-                .uri("/v2/pilotauth?imei=111111111111111&imei2=222222222222222&serial=ser-new&public_key=pub&register_token=not-a-jwt")
+                .uri("/v2/pilotauth?imei=111111111111111&imei2=222222222222222&serial=ser-new&public_key=pub-pilotauth-2&register_token=not-a-jwt")
                 .body(Body::empty())
                 .unwrap(),
         )
