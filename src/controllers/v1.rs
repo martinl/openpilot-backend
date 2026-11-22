@@ -1043,6 +1043,7 @@ async fn update_device_alias(
         public_key: device_model.public_key,
         prime: device_model.prime,
         prime_type: device_model.prime_type,
+        device_type: device_model.device_type,
         sim_id: device_model.sim_id,
         ..Default::default()
     })
@@ -1134,6 +1135,7 @@ async fn set_destination(
         Ok(_) => serde_json::json!({
             "success": true,
             "dongle_id": dongle_id,
+            "saved_next": true,
         }), // Respond with success
         Err(e) => {
             tracing::error!("Failed to update device locations. DB Error {}", e);
@@ -1481,6 +1483,16 @@ async fn clear_nav_destination(
             Vec::new()
         };
 
+    let deleted = locations
+        .iter()
+        .find(|loc| loc.next)
+        .map(|loc| Destination {
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            place_details: loc.place_details.clone(),
+            place_name: loc.place_name.clone(),
+        })
+        .unwrap_or_default();
     for loc in locations.iter_mut() {
         loc.next = false;
     }
@@ -1496,7 +1508,11 @@ async fn clear_nav_destination(
     DMQM::insert_msg(&ctx.db, &dongle_id, clear_msg).await?;
 
     match active_device.update(&ctx.db).await {
-        Ok(_) => Ok((StatusCode::OK, Json(json!({ "success": true }))).into_response()),
+        Ok(_) => Ok((
+            StatusCode::OK,
+            Json(json!({ "success": true, "deleted": deleted })),
+        )
+            .into_response()),
         Err(e) => {
             tracing::error!("Failed to clear nav destination: {}", e);
             Ok((
