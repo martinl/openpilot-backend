@@ -238,7 +238,11 @@ where
         prev_seg_number += 1;
     }
     response.push_str("#EXT-X-ENDLIST\n");
-    Ok(response.into_response())
+    Ok((
+        [(header::CONTENT_TYPE, "application/vnd.apple.mpegurl")],
+        response,
+    )
+        .into_response())
 }
 
 // Wrappers for each camera type
