@@ -13,7 +13,7 @@
         --input-border: #2a2f3a;
         --table-bg: #16181f;
         --table-alt-bg: #0f1014;
-        --primary: #cfd2ff; 
+        --primary: #cfd2ff;
         --success: #9fb3ff;
         --danger: #FF5252;
       }
@@ -275,32 +275,32 @@
           padding: 4px 8px;
         }
         th, td { padding: 2px 4px; }
-        
+
         /* Make tables horizontally scrollable on mobile */
         details {
           overflow-x: auto;
         }
-        
+
         table {
           min-width: 100%;
           white-space: nowrap;
         }
-        
+
         /* Specific table optimizations */
         #table_devices {
           min-width: 800px; /* Ensure minimum width for device table */
         }
-        
+
         #data-table {
           min-width: 600px; /* Ensure minimum width for segments table */
         }
-        
+
         /* Make buttons smaller on mobile */
         button {
           padding: 2px 4px;
           font-size: 10px;
         }
-        
+
         /* Adjust modal for mobile */
         .modal-content {
           padding: 8px;
@@ -309,21 +309,21 @@
           margin: 10px;
           overflow-y: auto;
         }
-        
+
         .modal video {
           max-width: 90vw;
           max-height: 60vh;
           width: 100%;
           height: auto;
         }
-        
+
         .modal-close {
           font-size: 20px;
           padding: 12px;
           min-width: 44px;
           min-height: 44px;
         }
-        
+
         #uploadQueueModal .modal-content {
           width: 98vw;
           max-height: 88vh;
@@ -335,18 +335,18 @@
           min-height: 28px;
           font-size: 18px;
         }
-        
+
         #uploadQueueContent table {
           font-size: 11px;
           min-width: 300px;
         }
-        
+
         #uploadQueueContent th,
         #uploadQueueContent td {
           padding: 2px 4px;
           word-break: break-word;
         }
-        
+
         #uploadQueueContent progress {
           width: 60px;
         }
@@ -535,7 +535,7 @@
           formatRouteStartTimes();
           initDistanceUnitToggle();
           formatCompactNumbers();
-        
+
         // Add play buttons for .ts and .hevc links
         document.querySelectorAll('a').forEach(function(link) {
           if (link.href && (link.href.endsWith('.ts'))) {
@@ -563,7 +563,7 @@
             localStorage.setItem(key, el.open);
           });
         });
-        
+
       });
 
       function formatRouteStartTimes() {
@@ -658,7 +658,7 @@
         .then(response => response.json())
         .catch(() => {});
       }
-      
+
       async function calculateSegmentStartOffset(m3u8Url, targetSegment) {
         if (targetSegment === null || Number.isNaN(targetSegment)) {
           return 0;
@@ -826,7 +826,7 @@
 
       // --- Show upload queue in modal ---
       let uploadQueueModalInterval = null;
-      
+
       function showUploadQueueModal(dongleId) {
         const modal = document.getElementById('uploadQueueModal');
         const content = document.getElementById('uploadQueueContent');
@@ -838,10 +838,10 @@
 
         content.innerHTML = '<div class="upload-queue-loading"><p class="upload-queue-loading-title">Loading queue...</p></div>';
         modal.style.display = 'flex';
-        
+
         // Load initial data
         loadUploadQueueData(dongleId);
-        
+
         // Start auto-refresh every 10 seconds
         uploadQueueModalInterval = setInterval(() => {
           loadUploadQueueData(dongleId);
@@ -851,7 +851,7 @@
       function closeUploadQueueModal() {
         const modal = document.getElementById('uploadQueueModal');
         modal.style.display = 'none';
-        
+
         // Stop auto-refresh when modal is closed
         if (uploadQueueModalInterval) {
           clearInterval(uploadQueueModalInterval);
@@ -862,18 +862,18 @@
       async function loadUploadQueueData(dongleId) {
         const content = document.getElementById('uploadQueueContent');
         const queue = await listUploadQueue(dongleId);
-        
+
         if (queue.length === 0) {
           content.innerHTML = '<div class="upload-queue-empty"><p class="upload-queue-empty-title">No files in upload queue</p><p class="upload-queue-empty-subtitle">Start an upload from a segment row and it will appear here.</p></div>';
           return;
         }
-        
+
         let html = '<table><thead><tr><th>File</th><th>Progress</th><th>Status</th></tr></thead><tbody>';
-        
+
         queue.forEach(item => {
           const fileName = item.path.split('/').pop();
           const routeName = item.path.split('/').slice(-2, -1).join('/');
-          
+
           const progress = Math.round(item.progress * 100);
           const status = item.current ? (progress >= 100 ? 'Complete' : 'Uploading') : 'Pending';
           const statusClass = status.toLowerCase();
@@ -891,7 +891,7 @@
             </tr>
           `;
         });
-        
+
         html += '</tbody></table>';
         content.innerHTML = html;
       }
@@ -1015,12 +1015,12 @@
       }
     </script>
 
-    <script>      
+    <script>
       // --- Function to request upload URLs from your backend ---
       async function getUploadUrls(dongleId, paths) {
         const url = `{{ api_host | safe }}/v1/${dongleId}/upload_urls`;
         const payload = { paths };
-        
+
         const response = await fetch(url, {
           method: 'POST',
           headers: {
@@ -1029,7 +1029,7 @@
           credentials: 'include',
           body: JSON.stringify(payload),
         });
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`Error ${response.status}: ${errorText}`);
@@ -1037,7 +1037,7 @@
         // Expected response: an array of objects with a "url" property.
         return await response.json();
       }
-    
+
       // --- Function to upload file using the obtained upload URL ---
       async function uploadFile(dongleId, segmentNumber, canonicalRouteName, file, segmentNum, fileType) {
         // Extract route name assuming canonicalRouteName is formatted like "something|routeName"
@@ -1046,7 +1046,7 @@
 
         // Create an array to hold file paths
         let filePaths = [];
-        
+
         // Add the original file path
         let filePath = file;
         if (file.includes('rlog') || file.includes('qlog')) {
@@ -1068,7 +1068,7 @@
             filePath += '.hevc';
           }
         }
-        
+
         // Add the original file path to the array
         filePaths.push(filePath);
 
@@ -1102,7 +1102,7 @@
               credentials: 'include',
               body: JSON.stringify(uploadCommand)
             });
-            
+
             if (!response.ok) {
               throw new Error('Network response was not ok');
             }
@@ -1114,7 +1114,7 @@
           document.getElementById(`progressContainer_${segmentNum}_${fileType}`).style.display = 'block';
           document.getElementById(`uploadButton_${segmentNum}_${fileType}`).style.display = 'none';
           startUploadQueuePolling(dongleId); // Start polling after upload
-          
+
         } catch (error) {
           console.error('Upload error:', error);
         }
@@ -1239,7 +1239,7 @@
         const container = document.getElementById(containerId);
         // Optionally, show a loading indicator.
         container.innerHTML = 'Loading...';
-    
+
         try {
             // Adjust the URL according to your routing.
             const response = await fetch(
@@ -1250,7 +1250,7 @@
                   'Content-Type': 'application/json',
                 },
                 credentials: 'include'
-              }    
+              }
               );
             if (!response.ok) {
                 container.innerHTML = 'Failed to load logs';

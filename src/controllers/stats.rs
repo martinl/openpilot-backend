@@ -10,6 +10,7 @@ use axum::{
 use chrono::TimeZone;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use sysinfo::Disks;
 use tokio::time::{self, Duration};
@@ -23,8 +24,9 @@ pub struct CpuUsage {
     pub core: u8,
     pub usage: f32,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct DiskSpace {
+    pub name: String,
     pub total: u64,
     pub used: u64,
     pub free: u64,
@@ -60,6 +62,7 @@ pub struct DriveStats {
 pub struct ServerUsage {
     pub time: String,
     pub disk_usage: Vec<DiskSpace>,
+    pub database_size_bytes: Option<u64>,
     //users: u64,
     pub devices: Devices,
     pub drive_stats: DriveStats,
@@ -70,22 +73,192 @@ pub struct ServerUsage {
     pub daily_devices_over_time: Vec<TimeSeriesPoint>,
 }
 
-async fn get_disk_usage() -> Vec<DiskSpace> {
-    let disks = Disks::new_with_refreshed_list();
-    disks
-        .iter()
-        .filter(|disk| disk.name() == "/dev/md0")
-        .map(|disk| DiskSpace {
-            total: disk.total_space(),
-            used: disk.total_space() - disk.available_space(),
-            free: disk.available_space(),
+#[derive(Deserialize)]
+struct PromQueryResponse {
+    status: String,
+    data: PromQueryData,
+}
+
+#[derive(Deserialize)]
+struct PromQueryData {
+    result: Vec<PromVectorSample>,
+}
+
+#[derive(Deserialize)]
+struct PromVectorSample {
+    metric: BTreeMap<String, String>,
+    value: (f64, String),
+}
+
+fn resolve_prometheus_namespace() -> Option<String> {
+    std::env::var("PROMETHEUS_NAMESPACE")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .or_else(|| {
+            std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        })
+}
+
+async fn query_prometheus_vector(
+    client: &reqwest::Client,
+    prom_url: &str,
+    query: &str,
+) -> Option<Vec<PromVectorSample>> {
+    let base = format!("{}/api/v1/query", prom_url.trim_end_matches('/'));
+    let url = url::Url::parse_with_params(&base, &[("query", query)]).ok()?;
+    let resp = client
+        .get(url)
+        .timeout(Duration::from_secs(2))
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let parsed: PromQueryResponse = resp.json().await.ok()?;
+    if parsed.status != "success" {
+        return None;
+    }
+    Some(parsed.data.result)
+}
+
+fn parse_sample_u64(sample: &PromVectorSample) -> Option<u64> {
+    let val: f64 = sample.value.1.parse().ok()?;
+    if !val.is_finite() || val < 0.0 {
+        return None;
+    }
+    Some(val.round() as u64)
+}
+
+fn parse_pvc_disk_usage(
+    capacity: &[PromVectorSample],
+    used: &[PromVectorSample],
+    available: &[PromVectorSample],
+) -> Vec<DiskSpace> {
+    let mut map: BTreeMap<String, (u64, u64, u64)> = BTreeMap::new();
+
+    for s in capacity {
+        if let (Some(pvc), Some(val)) = (s.metric.get("persistentvolumeclaim"), parse_sample_u64(s))
+        {
+            map.entry(pvc.clone()).or_default().0 = val;
+        }
+    }
+    for s in used {
+        if let (Some(pvc), Some(val)) = (s.metric.get("persistentvolumeclaim"), parse_sample_u64(s))
+        {
+            map.entry(pvc.clone()).or_default().1 = val;
+        }
+    }
+    for s in available {
+        if let (Some(pvc), Some(val)) = (s.metric.get("persistentvolumeclaim"), parse_sample_u64(s))
+        {
+            map.entry(pvc.clone()).or_default().2 = val;
+        }
+    }
+
+    map.into_iter()
+        .filter(|(_, (total, _, _))| *total > 0)
+        .map(|(name, (total, used, free))| {
+            let free = if free > 0 {
+                free
+            } else {
+                total.saturating_sub(used)
+            };
+            DiskSpace {
+                name,
+                total,
+                used,
+                free,
+            }
         })
         .collect()
+}
+
+fn parse_database_size(samples: &[PromVectorSample]) -> Option<u64> {
+    let mut total: u64 = 0;
+    let mut found = false;
+    for s in samples {
+        if let Some(val) = parse_sample_u64(s) {
+            total = total.saturating_add(val);
+            found = true;
+        }
+    }
+    found.then_some(total)
+}
+
+fn get_local_disk_usage() -> Vec<DiskSpace> {
+    let disks = Disks::new_with_refreshed_list();
+    let mut by_mount: BTreeMap<String, DiskSpace> = BTreeMap::new();
+    for disk in disks.iter() {
+        let mount = disk.mount_point().to_string_lossy().to_string();
+        if (mount == "/params" || mount == "/") && disk.total_space() > 0 {
+            let total = disk.total_space();
+            let free = disk.available_space();
+            by_mount.insert(
+                mount.clone(),
+                DiskSpace {
+                    name: mount,
+                    total,
+                    used: total.saturating_sub(free),
+                    free,
+                },
+            );
+        }
+    }
+    by_mount.into_values().collect()
+}
+
+async fn get_storage_stats(client: &reqwest::Client) -> (Vec<DiskSpace>, Option<u64>) {
+    let prom_url = std::env::var("PROMETHEUS_URL")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+
+    if let Some(prom_url) = prom_url {
+        let ns_filter = resolve_prometheus_namespace()
+            .map(|ns| format!("namespace=\"{ns}\""))
+            .unwrap_or_default();
+
+        let cap_q = format!("kubelet_volume_stats_capacity_bytes{{{ns_filter}}}");
+        let used_q = format!("kubelet_volume_stats_used_bytes{{{ns_filter}}}");
+        let avail_q = format!("kubelet_volume_stats_available_bytes{{{ns_filter}}}");
+        let db_q = if ns_filter.is_empty() {
+            "cnpg_pg_database_size_bytes{datname!~\"template.*|postgres\"} or pg_database_size_bytes{datname!~\"template.*|postgres\"}".to_string()
+        } else {
+            format!(
+                "cnpg_pg_database_size_bytes{{{ns_filter}, datname!~\"template.*|postgres\"}} or pg_database_size_bytes{{{ns_filter}, datname!~\"template.*|postgres\"}}"
+            )
+        };
+
+        let (cap_res, used_res, avail_res, db_res) = tokio::join!(
+            query_prometheus_vector(client, &prom_url, &cap_q),
+            query_prometheus_vector(client, &prom_url, &used_q),
+            query_prometheus_vector(client, &prom_url, &avail_q),
+            query_prometheus_vector(client, &prom_url, &db_q),
+        );
+
+        let disks = parse_pvc_disk_usage(
+            cap_res.as_deref().unwrap_or(&[]),
+            used_res.as_deref().unwrap_or(&[]),
+            avail_res.as_deref().unwrap_or(&[]),
+        );
+        let db_size = db_res.as_deref().and_then(parse_database_size);
+
+        if !disks.is_empty() {
+            return (disks, db_size);
+        }
+        return (get_local_disk_usage(), db_size);
+    }
+
+    (get_local_disk_usage(), None)
 }
 
 pub async fn get_server_usage(
     ViewEngine(view): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
+    Extension(client): Extension<reqwest::Client>,
 ) -> Result<impl IntoResponse> {
     let utc_time_now_millis = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -163,11 +336,14 @@ pub async fn get_server_usage(
         });
     }
 
+    let (disk_usage, database_size_bytes) = get_storage_stats(&client).await;
+
     views::route::server_usage(
         view,
         ServerUsage {
             time: chrono::Utc::now().to_rfc3339(),
-            disk_usage: get_disk_usage().await,
+            disk_usage,
+            database_size_bytes,
             devices: Devices {
                 total: DM::get_registered_devices(&ctx.db, None, None, None).await?,
                 online: DM::get_registered_devices(&ctx.db, Some(true), None, None).await?,
@@ -282,4 +458,61 @@ pub fn routes() -> Routes {
         .prefix("stats")
         .add("/usage", get(get_server_usage))
         .add("/ws/uploads", get(ws_uploads))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample(labels: &[(&str, &str)], value: &str) -> PromVectorSample {
+        PromVectorSample {
+            metric: labels
+                .iter()
+                .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+                .collect(),
+            value: (1_700_000_000.0, value.to_string()),
+        }
+    }
+
+    #[test]
+    fn parse_pvc_disk_usage_joins_and_sorts_volumes() {
+        let cap = vec![
+            sample(
+                &[("persistentvolumeclaim", "openpilot-db-1")],
+                "21474836480",
+            ),
+            sample(
+                &[("persistentvolumeclaim", "kvstore-minikeyvalue-0")],
+                "107374182400",
+            ),
+            sample(&[("persistentvolumeclaim", "zero-pvc")], "0"),
+        ];
+        let used = vec![
+            sample(&[("persistentvolumeclaim", "openpilot-db-1")], "1073741824"),
+            sample(
+                &[("persistentvolumeclaim", "kvstore-minikeyvalue-0")],
+                "5368709120",
+            ),
+        ];
+        let avail = vec![sample(
+            &[("persistentvolumeclaim", "openpilot-db-1")],
+            "20401094656",
+        )];
+
+        let disks = parse_pvc_disk_usage(&cap, &used, &avail);
+        assert_eq!(disks.len(), 2);
+        assert_eq!(disks[0].name, "kvstore-minikeyvalue-0");
+        assert_eq!(disks[0].total, 107_374_182_400);
+        assert_eq!(disks[0].used, 5_368_709_120);
+        assert_eq!(disks[0].free, 102_005_473_280);
+        assert_eq!(disks[1].name, "openpilot-db-1");
+        assert_eq!(disks[1].free, 20_401_094_656);
+    }
+
+    #[test]
+    fn parse_database_size_sums_valid_samples() {
+        assert_eq!(parse_database_size(&[]), None);
+        let samples = vec![sample(&[("datname", "openpilot")], "44040192")];
+        assert_eq!(parse_database_size(&samples), Some(44_040_192));
+    }
 }
