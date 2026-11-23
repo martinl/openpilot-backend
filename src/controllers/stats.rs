@@ -63,7 +63,6 @@ pub struct ServerUsage {
     pub time: String,
     pub distance_unit: String,
     pub disk_usage: Vec<DiskSpace>,
-    pub database_size_bytes: Option<u64>,
     //users: u64,
     pub devices: Devices,
     pub drive_stats: DriveStats,
@@ -192,18 +191,6 @@ fn parse_pvc_disk_usage(
         .collect()
 }
 
-fn parse_database_size(samples: &[PromVectorSample]) -> Option<u64> {
-    let mut total: u64 = 0;
-    let mut found = false;
-    for s in samples {
-        if let Some(val) = parse_sample_u64(s) {
-            total = total.saturating_add(val);
-            found = true;
-        }
-    }
-    found.then_some(total)
-}
-
 fn get_local_disk_usage() -> Vec<DiskSpace> {
     let disks = Disks::new_with_refreshed_list();
     let mut by_mount: BTreeMap<String, DiskSpace> = BTreeMap::new();
@@ -226,7 +213,7 @@ fn get_local_disk_usage() -> Vec<DiskSpace> {
     by_mount.into_values().collect()
 }
 
-async fn get_storage_stats(client: &reqwest::Client) -> (Vec<DiskSpace>, Option<u64>) {
+async fn get_disk_usage(client: &reqwest::Client) -> Vec<DiskSpace> {
     let prom_url = std::env::var("PROMETHEUS_URL")
         .ok()
         .filter(|v| !v.trim().is_empty());
@@ -239,19 +226,11 @@ async fn get_storage_stats(client: &reqwest::Client) -> (Vec<DiskSpace>, Option<
         let cap_q = format!("kubelet_volume_stats_capacity_bytes{{{ns_filter}}}");
         let used_q = format!("kubelet_volume_stats_used_bytes{{{ns_filter}}}");
         let avail_q = format!("kubelet_volume_stats_available_bytes{{{ns_filter}}}");
-        let db_q = if ns_filter.is_empty() {
-            "cnpg_pg_database_size_bytes{datname!~\"template.*|postgres\"} or pg_database_size_bytes{datname!~\"template.*|postgres\"}".to_string()
-        } else {
-            format!(
-                "cnpg_pg_database_size_bytes{{{ns_filter}, datname!~\"template.*|postgres\"}} or pg_database_size_bytes{{{ns_filter}, datname!~\"template.*|postgres\"}}"
-            )
-        };
 
-        let (cap_res, used_res, avail_res, db_res) = tokio::join!(
+        let (cap_res, used_res, avail_res) = tokio::join!(
             query_prometheus_vector(client, &prom_url, &cap_q),
             query_prometheus_vector(client, &prom_url, &used_q),
             query_prometheus_vector(client, &prom_url, &avail_q),
-            query_prometheus_vector(client, &prom_url, &db_q),
         );
 
         let disks = parse_pvc_disk_usage(
@@ -259,15 +238,13 @@ async fn get_storage_stats(client: &reqwest::Client) -> (Vec<DiskSpace>, Option<
             used_res.as_deref().unwrap_or(&[]),
             avail_res.as_deref().unwrap_or(&[]),
         );
-        let db_size = db_res.as_deref().and_then(parse_database_size);
 
         if !disks.is_empty() {
-            return (disks, db_size);
+            return disks;
         }
-        return (get_local_disk_usage(), db_size);
     }
 
-    (get_local_disk_usage(), None)
+    get_local_disk_usage()
 }
 
 pub async fn get_server_usage(
@@ -351,7 +328,7 @@ pub async fn get_server_usage(
         });
     }
 
-    let (disk_usage, database_size_bytes) = get_storage_stats(&client).await;
+    let disk_usage = get_disk_usage(&client).await;
 
     views::route::server_usage(
         view,
@@ -359,7 +336,6 @@ pub async fn get_server_usage(
             time: chrono::Utc::now().to_rfc3339(),
             distance_unit: configured_distance_unit().to_string(),
             disk_usage,
-            database_size_bytes,
             devices: Devices {
                 total: DM::get_registered_devices(&ctx.db, None, None, None).await?,
                 online: DM::get_registered_devices(&ctx.db, Some(true), None, None).await?,
@@ -523,13 +499,6 @@ mod tests {
         assert_eq!(disks[0].free, 102_005_473_280);
         assert_eq!(disks[1].name, "openpilot-db-1");
         assert_eq!(disks[1].free, 20_401_094_656);
-    }
-
-    #[test]
-    fn parse_database_size_sums_valid_samples() {
-        assert_eq!(parse_database_size(&[]), None);
-        let samples = vec![sample(&[("datname", "openpilot")], "44040192")];
-        assert_eq!(parse_database_size(&samples), Some(44_040_192));
     }
 
     #[test]
