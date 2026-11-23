@@ -65,6 +65,7 @@ pub struct MasterTemplate {
     pub api_host: String,
     pub ws_host: String,
     pub frontend_url: String,
+    pub distance_unit: String,
     pub onebox: String,
     pub dongle_id: String,
     pub device_online: Option<bool>,
@@ -143,6 +144,7 @@ pub async fn onebox_handler(
         api_host: api_endpoint,
         ws_host: ws_endpoint,
         frontend_url,
+        distance_unit: super::stats::configured_distance_unit().to_string(),
         ..Default::default()
     };
     if user_model.superuser {

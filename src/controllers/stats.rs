@@ -61,6 +61,7 @@ pub struct DriveStats {
 #[derive(Serialize, Deserialize)]
 pub struct ServerUsage {
     pub time: String,
+    pub distance_unit: String,
     pub disk_usage: Vec<DiskSpace>,
     pub database_size_bytes: Option<u64>,
     //users: u64,
@@ -71,6 +72,20 @@ pub struct ServerUsage {
     pub daily_miles_over_time: Vec<TimeSeriesPoint>,
     pub devices_over_time: Vec<TimeSeriesPoint>,
     pub daily_devices_over_time: Vec<TimeSeriesPoint>,
+}
+
+/// Returns `"mi"` when `STATS_UNIT` is `"imperial"`, `"mi"`, or `"miles"`, otherwise `"km"` (metric default).
+pub fn configured_distance_unit() -> &'static str {
+    match std::env::var("STATS_UNIT")
+        .ok()
+        .as_deref()
+        .map(str::trim)
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("imperial" | "mi" | "miles") => "mi",
+        _ => "km",
+    }
 }
 
 #[derive(Deserialize)]
@@ -342,6 +357,7 @@ pub async fn get_server_usage(
         view,
         ServerUsage {
             time: chrono::Utc::now().to_rfc3339(),
+            distance_unit: configured_distance_unit().to_string(),
             disk_usage,
             database_size_bytes,
             devices: Devices {
@@ -514,5 +530,27 @@ mod tests {
         assert_eq!(parse_database_size(&[]), None);
         let samples = vec![sample(&[("datname", "openpilot")], "44040192")];
         assert_eq!(parse_database_size(&samples), Some(44_040_192));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn configured_distance_unit_defaults_to_km_and_supports_imperial() {
+        let prev = std::env::var("STATS_UNIT").ok();
+        std::env::remove_var("STATS_UNIT");
+        assert_eq!(configured_distance_unit(), "km");
+
+        std::env::set_var("STATS_UNIT", "metric");
+        assert_eq!(configured_distance_unit(), "km");
+
+        std::env::set_var("STATS_UNIT", "imperial");
+        assert_eq!(configured_distance_unit(), "mi");
+
+        std::env::set_var("STATS_UNIT", "MI");
+        assert_eq!(configured_distance_unit(), "mi");
+
+        match prev {
+            Some(v) => std::env::set_var("STATS_UNIT", v),
+            None => std::env::remove_var("STATS_UNIT"),
+        }
     }
 }
