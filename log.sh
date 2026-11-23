@@ -1,1 +1,0 @@
-docker logs connect-killer-connect-1 --tail 5000 -f

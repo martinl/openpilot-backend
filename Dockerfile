@@ -59,7 +59,6 @@ WORKDIR /app
 
 COPY --from=builder /usr/local/bin/connect-cli /app/connect-cli
 COPY --chown=1000:1000 assets/ /app/assets/
-COPY --chown=1000:1000 config/ /app/config/
 
 USER 1000:1000
 
