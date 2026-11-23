@@ -563,10 +563,13 @@
         <!-- Disk Usage -->
         <div class="stat-card">
             <h3>Disk Usage</h3>
+            {% if database_size_bytes %}
+            <div class="progress-text" style="margin-bottom: 12px;">PostgreSQL database size: <span class="bytes">{{ database_size_bytes | filesizeformat }}</span></div>
+            {% endif %}
             <table class="disk-table">
                 <thead>
                     <tr>
-                        <th>Drive</th>
+                        <th>Volume</th>
                         <th>Total</th>
                         <th>Used</th>
                         <th>Free</th>
@@ -576,9 +579,13 @@
                 </thead>
                 <tbody>
                     {% for disk in disk_usage %}
+                    {% if disk.total > 0 %}
                     {% set usage_percent = (disk.used / disk.total * 100) | round %}
+                    {% else %}
+                    {% set usage_percent = 0 %}
+                    {% endif %}
                     <tr>
-                        <td>Drive {{ loop.index }}</td>
+                        <td>{{ disk.name }}</td>
                         <td class="bytes">{{ disk.total | filesizeformat }}</td>
                         <td class="bytes">{{ disk.used | filesizeformat }}</td>
                         <td class="bytes">{{ disk.free | filesizeformat }}</td>
