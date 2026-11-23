@@ -10,7 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Multi-stage container images (`Dockerfile`, `Dockerfile.frontend`) with non-root runtime configuration and startup runtime config injection (`config.js`) for immutable promotion across environments.
 - GitHub Actions CI/CD workflow (`.github/workflows/ci.yaml`) with `rustfmt`, `clippy`, `cargo-audit`, PostgreSQL 18 integration tests, `cargo-llvm-cov` coverage reporting (`--fail-under-lines 50` gate and Shields.io badge), Trivy image scans, and GHCR image publishing on `main`/`master` merges and release tags.
 - Frontend Docker build metadata wiring (`VITE_APP_GIT_SHA`, `VITE_APP_GIT_TIMESTAMP`) from the `frontend` submodule into `BuildInfo`.
-- Expanded test suite from 13 to 54 unit tests plus end-to-end PostgreSQL 18 integration tests (`tests/models_integration.rs`, `tests/v1_and_admin_api.rs`, `tests/connect_io_api.rs`) backed by an in-process `MockMkvServer`.
+- Native Prometheus metrics exporter on internal `:9090/metrics` (`METRICS_PORT`) with explicit histogram buckets for HTTP RED metrics (`http_requests_total`, `http_request_duration_seconds`, `http_requests_in_flight`), Athena connected devices, active uploads, and background worker jobs (`worker_jobs_total`, `worker_job_duration_seconds`).
+- Grafana RED (`deploy/grafana/dashboards/openpilot-red.json`) and Application/Storage/PostgreSQL (`deploy/grafana/dashboards/openpilot-app.json`) dashboards.
+- Expanded test suite from 13 to 55 unit tests plus end-to-end PostgreSQL 18 integration tests (`tests/models_integration.rs`, `tests/v1_and_admin_api.rs`, `tests/connect_io_api.rs`) backed by an in-process `MockMkvServer`.
 - Comma.ai OpenAPI 3.1 contract test suite (`tests/openapi_contract.rs` against vendored `tests/fixtures/comma-openapi.json`) validating implemented routes and live JSON responses.
 - Pre-commit configuration (`.pre-commit-config.yaml`) including RustSec `cargo-audit` checks.
 - Parameterized environment configuration for OAuth, cookies (`COOKIE_NAME`, `COOKIE_DOMAIN`), CORS origins, optional internal TLS, and Connect frontend endpoints.
@@ -50,7 +52,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### 2025-01 – 2025-05
 - Integrated `new-connect` SPA frontend support, Mapbox proxy with per-user rate limiting, cloudlog cache (`swaglog`), and `/params` analytics.
-- Added `rlog.zst` on-demand upload support, route `git_remote` / `git_commit` / `git_branch` metadata, and Prometheus metrics.
+- Added `rlog.zst` on-demand upload support, route `git_remote` / `git_commit` / `git_branch` metadata, and nginx Prometheus proxy config.
 
 ### 2024-08 – 2024-12
 - Added Zstandard (`.zst`) log compression support and resilient route timestamp calculation when GPS time is unavailable.
