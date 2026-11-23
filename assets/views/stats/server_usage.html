@@ -518,23 +518,37 @@
         <div class="stats-grid">
             <div class="stat-card">
                 <h3>Drives</h3>
+                {% set is_metric = distance_unit | default(value="km") == "km" %}
+                {% if is_metric %}
+                {% set total_distance = (drive_stats.total_miles * 1.609344) | round %}
+                {% set unit_label = "Kilometers" %}
+                {% set unit_short = "km" %}
+                {% else %}
+                {% set total_distance = drive_stats.total_miles %}
+                {% set unit_label = "Miles" %}
+                {% set unit_short = "miles" %}
+                {% endif %}
                 <div class="devices-grid">
                     <div class="device-stat">
-                        <div class="value status-online">{{ drive_stats.total_miles }}</div>
-                        <div class="label">Miles</div>
+                        <div class="value status-online">{{ total_distance }}</div>
+                        <div class="label">{{ unit_label }}</div>
                     </div>
                     <div class="device-stat">
                         <div class="value status-total">{{ drive_stats.total_drives }}</div>
                         <div class="label">Drives</div>
                     </div>
                 </div>
-                <div class="progress-text">{{ (drive_stats.total_miles / drive_stats.total_drives) | round}} miles per drive</div>
+                {% if drive_stats.total_drives > 0 %}
+                <div class="progress-text">{{ (total_distance / drive_stats.total_drives) | round }} {{ unit_short }} per drive</div>
+                {% else %}
+                <div class="progress-text">0 {{ unit_short }} per drive</div>
+                {% endif %}
             </div>
         </div>
 
         <div class="stats-grid">
             <div class="stat-card">
-                <h3>Miles Over Time</h3>
+                <h3>{{ unit_label }} Over Time</h3>
                 <div class="toggle-container">
                     <label class="toggle-switch">
                         <input type="checkbox" id="miles-toggle">
@@ -563,9 +577,6 @@
         <!-- Disk Usage -->
         <div class="stat-card">
             <h3>Disk Usage</h3>
-            {% if database_size_bytes %}
-            <div class="progress-text" style="margin-bottom: 12px;">PostgreSQL database size: <span class="bytes">{{ database_size_bytes | filesizeformat }}</span></div>
-            {% endif %}
             <table class="disk-table">
                 <thead>
                     <tr>
@@ -637,14 +648,14 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
-        // Miles over time chart
+        // Distance over time chart
+        const isMetric = '{{ distance_unit | default(value="km") }}' === 'km';
+        const distScale = isMetric ? 1.609344 : 1.0;
+        const unitLabel = isMetric ? 'Kilometers' : 'Miles';
+        const unitShort = isMetric ? 'km' : 'Miles';
         const milesLabels = [{% for point in miles_over_time %}'{{ point.date }}'{% if not loop.last %}, {% endif %}{% endfor %}];
-        const cumulativeMilesData = [{% for point in miles_over_time %}{{ point.miles }}{% if not loop.last %}, {% endif %}{% endfor %}];
-        const dailyMilesData = [{% for point in daily_miles_over_time %}{{ point.miles }}{% if not loop.last %}, {% endif %}{% endfor %}];
-
-        console.log('Miles Labels:', milesLabels);
-        console.log('Cumulative Miles Data:', cumulativeMilesData);
-        console.log('Daily Miles Data:', dailyMilesData);
+        const cumulativeMilesData = [{% for point in miles_over_time %}{{ point.miles }}{% if not loop.last %}, {% endif %}{% endfor %}].map(v => Math.round(v * distScale * 10) / 10);
+        const dailyMilesData = [{% for point in daily_miles_over_time %}{{ point.miles }}{% if not loop.last %}, {% endif %}{% endfor %}].map(v => Math.round(v * distScale * 10) / 10);
 
         const ctx = document.getElementById('milesChart');
         if (ctx) {
@@ -653,7 +664,7 @@
                 data: {
                     labels: milesLabels,
                     datasets: [{
-                        label: 'Total Miles',
+                        label: 'Total ' + unitShort,
                         data: cumulativeMilesData,
                         borderColor: '#cfd2ff',
                         backgroundColor: 'rgba(207, 210, 255, 0.18)',
@@ -675,7 +686,7 @@
                             },
                             title: {
                                 display: true,
-                                text: 'Miles',
+                                text: unitLabel,
                                 color: '#a3a7b6'
                             }
                         },
@@ -698,16 +709,16 @@
                 }
             });
 
-            // Toggle for miles chart
+            // Toggle for distance chart
             const milesToggle = document.getElementById('miles-toggle');
             if (milesToggle) {
                 milesToggle.addEventListener('change', function() {
                     if (this.checked) {
                         milesChart.data.datasets[0].data = dailyMilesData;
-                        milesChart.data.datasets[0].label = 'Daily Miles';
+                        milesChart.data.datasets[0].label = 'Daily ' + unitShort;
                     } else {
                         milesChart.data.datasets[0].data = cumulativeMilesData;
-                        milesChart.data.datasets[0].label = 'Total Miles';
+                        milesChart.data.datasets[0].label = 'Total ' + unitShort;
                     }
                 milesChart.update();
                 });

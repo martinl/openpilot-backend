@@ -578,8 +578,8 @@
         });
       }
 
-      function formatDistanceValue(km, unit) {
-        const value = unit === 'mi' ? km * 0.621371 : km;
+      function formatDistanceValue(miles, unit) {
+        const value = unit === 'mi' ? miles : miles * 1.609344;
         return value.toFixed(2);
       }
 
@@ -602,11 +602,11 @@
 
       function updateDistanceCells(unit) {
         document.querySelectorAll('.route-distance').forEach(function(cell) {
-          const km = Number(cell.getAttribute('data-km'));
-          if (Number.isNaN(km)) {
+          const miles = Number(cell.getAttribute('data-miles'));
+          if (Number.isNaN(miles)) {
             return;
           }
-          cell.textContent = formatDistanceValue(km, unit);
+          cell.textContent = formatDistanceValue(miles, unit);
         });
 
         const header = document.getElementById('distanceHeader');
@@ -623,8 +623,9 @@
           return;
         }
 
+        const defaultUnit = header.getAttribute('data-default-unit') === 'mi' ? 'mi' : 'km';
         const savedUnit = localStorage.getItem('route-distance-unit');
-        const unit = savedUnit === 'mi' ? 'mi' : 'km';
+        const unit = savedUnit === 'mi' || savedUnit === 'km' ? savedUnit : defaultUnit;
         updateDistanceCells(unit);
 
         header.addEventListener('click', function() {
@@ -1402,7 +1403,7 @@
               <tr>
                 <td>Start Time</td>
                 <td>Route</td>
-                <td id="distanceHeader" class="header-clickable" data-unit="km">Distance (km)</td>
+                <td id="distanceHeader" class="header-clickable" data-unit="{{ distance_unit | default(value='km') }}" data-default-unit="{{ distance_unit | default(value='km') }}">Distance ({{ distance_unit | default(value='km') }})</td>
                 <td>maxlog</td>
                 <td>maxqlog</td>
                 <td>maxqcamera</td>
@@ -1416,7 +1417,7 @@
               <tr>
                 <td><span class="route-start-time" data-iso="{{ route.start_time }}">{{ route.start_time }}</span></td>
                 <td><a href="/?onebox={{ route.fullname }}">{{ route.fullname }}</a></td>
-                <td class="route-distance" data-km="{{ route.length }}">{{ route.length }}</td>
+                <td class="route-distance" data-miles="{{ route.length }}">{{ route.length }}</td>
                 <td class="compact-number" data-value="{{ route.maxlog }}">{{ route.maxlog }}</td>
                 <td class="compact-number" data-value="{{ route.maxqlog }}">{{ route.maxqlog }}</td>
                 <td class="compact-number" data-value="{{ route.maxqcamera }}">{{ route.maxqcamera }}</td>
