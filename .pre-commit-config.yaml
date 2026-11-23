@@ -19,8 +19,6 @@ repos:
       - id: detect-private-key
       - id: check-yaml
         args: ["--allow-multiple-documents"]
-        # Exclude Loco Tera-templated config files ({{ get_env(...) }})
-        exclude: ^config/.*\.yaml$
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
