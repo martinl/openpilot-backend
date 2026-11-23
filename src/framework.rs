@@ -571,10 +571,30 @@ pub mod worker {
 
         async fn perform_later(ctx: &AppContext, args: A) -> super::Result<()> {
             let worker = Self::build(ctx);
+            let worker_name = std::any::type_name::<Self>()
+                .rsplit("::")
+                .next()
+                .unwrap_or("unknown");
             tokio::spawn(async move {
-                if let Err(e) = worker.perform(args).await {
-                    tracing::error!(error = %e, "Background worker task failed");
-                }
+                let start = std::time::Instant::now();
+                let status = match worker.perform(args).await {
+                    Ok(()) => "ok",
+                    Err(e) => {
+                        tracing::error!(error = %e, "Background worker task failed");
+                        "error"
+                    }
+                };
+                metrics::counter!(
+                    "worker_jobs_total",
+                    "worker" => worker_name,
+                    "status" => status,
+                )
+                .increment(1);
+                metrics::histogram!(
+                    "worker_job_duration_seconds",
+                    "worker" => worker_name,
+                )
+                .record(start.elapsed().as_secs_f64());
             });
             Ok(())
         }

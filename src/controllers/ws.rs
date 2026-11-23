@@ -151,6 +151,10 @@ impl ConnectionManager {
         let devices = self.devices.lock().await;
         devices.contains_key(dongle_id)
     }
+
+    pub async fn online_device_count(&self) -> usize {
+        self.devices.lock().await.len()
+    }
 }
 
 async fn handle_jsonrpc_request(

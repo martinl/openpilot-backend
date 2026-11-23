@@ -66,6 +66,8 @@ indicatif = "0.18"
 serde_urlencoded = "0.7.1"
 governor = "0.10.0"
 dashmap = "6.1.0"
+metrics = "0.24"
+metrics-exporter-prometheus = { version = "0.16", default-features = false }
 
 [[bin]]
 name = "connect-cli"

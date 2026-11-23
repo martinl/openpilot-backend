@@ -111,6 +111,16 @@ impl UploadTracker {
         self.active.remove(id);
     }
 
+    pub fn active_stats(&self) -> (usize, u64) {
+        let mut count = 0usize;
+        let mut bytes = 0u64;
+        for entry in self.active.iter() {
+            count += 1;
+            bytes = bytes.saturating_add(entry.value().bytes_received);
+        }
+        (count, bytes)
+    }
+
     pub fn snapshot_message(&self, is_superuser: bool) -> UploadsSnapshotMessage {
         let now_ms = unix_millis_now();
         let mut total_speed_bps = 0.0;

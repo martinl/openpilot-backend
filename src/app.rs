@@ -127,6 +127,9 @@ impl Hooks for App {
     }
 
     async fn after_routes(router: axum::Router, ctx: &AppContext) -> Result<axum::Router> {
+        let router = router.layer(axum::middleware::from_fn(
+            crate::common::metrics::http_metrics_middleware,
+        ));
         let router = NormalizePathLayer::trim_trailing_slash().layer(router);
         let router = axum::Router::new().fallback_service(router);
 
@@ -140,7 +143,9 @@ impl Hooks for App {
         };
 
         let connection_manager: Arc<ConnectionManager> = ConnectionManager::new();
+        let upload_tracker = UploadTracker::new();
         let ping_manager: Arc<ConnectionManager> = connection_manager.clone();
+        let metrics_tracker: Arc<UploadTracker> = upload_tracker.clone();
         let db_clone: DatabaseConnection = ctx.db.clone();
         tokio::spawn(async move {
             let mut interval = time::interval(time::Duration::from_secs(10)); // Ping every 10 seconds
@@ -151,6 +156,13 @@ impl Hooks for App {
                     &db_clone.clone(),
                 )
                 .await;
+                let online_devices = ping_manager.online_device_count().await;
+                let (active_uploads, active_upload_bytes) = metrics_tracker.active_stats();
+                crate::common::metrics::record_runtime_gauges(
+                    online_devices,
+                    active_uploads,
+                    active_upload_bytes,
+                );
             }
         });
 
@@ -174,7 +186,6 @@ impl Hooks for App {
             .build()
             .unwrap();
 
-        let upload_tracker = UploadTracker::new();
         let router = router
             .layer(Extension(client))
             .layer(Extension(connection_manager))
@@ -187,6 +198,25 @@ impl Hooks for App {
         app: axum::Router,
         server_config: crate::loco_rs::boot::ServeParams,
     ) -> Result<()> {
+        let metrics_port: u16 = env::var("METRICS_PORT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(9090);
+        if metrics_port > 0 {
+            let handle = crate::common::metrics::init_prometheus_handle();
+            let metrics_addr = SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, metrics_port));
+            tracing::info!("Binding Prometheus metrics on {}/metrics", metrics_addr);
+            tokio::spawn(async move {
+                let metrics_app = crate::common::metrics::metrics_router(handle);
+                if let Err(e) = axum_server::bind(metrics_addr)
+                    .serve(metrics_app.into_make_service())
+                    .await
+                {
+                    tracing::error!("Metrics server failed: {e}");
+                }
+            });
+        }
+
         let my_server_config = MyServerConfig {
             http: server_config.port as u16,
             https: (server_config.port + 111) as u16,
