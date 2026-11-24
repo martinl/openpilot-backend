@@ -48,7 +48,7 @@ ENV LOCO_ENV=useradmin
 ENV USERADMIN_PORT=3112
 ENV ENABLE_INTERNAL_TLS=false
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && apt-get install -y --no-install-recommends \
     ca-certificates \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
