@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minikeyvalue
+spec:
+  serviceName: minikeyvalue
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minikeyvalue
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minikeyvalue
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: minikeyvalue
+          image: ghcr.io/martinl/openpilot-backend/minikeyvalue:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: MKV_VOLUME_HOST
+              value: minikeyvalue
+          ports:
+            - name: master
+              containerPort: 3000
+            - name: vol1
+              containerPort: 3001
+            - name: vol2
+              containerPort: 3002
+            - name: vol3
+              containerPort: 3003
+            - name: vol4
+              containerPort: 3004
+            - name: vol5
+              containerPort: 3005
+          readinessProbe:
+            tcpSocket:
+              port: master
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: master
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: kvstore
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: kvstore
+      spec:
+        # Uses cluster default StorageClass; set storageClassName if needed
+        # storageClassName: standard
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 100Gi

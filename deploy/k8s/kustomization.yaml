@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: openpilot
+
+resources:
+  - configmap.yaml
+  - postgres-cnpg.yaml
+  - minikeyvalue-statefulset.yaml
+  - minikeyvalue-service.yaml
+  - backend-pvc.yaml
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - backend-servicemonitor.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - httproutes.yaml
+  # Create openpilot-secrets manually or include externalsecret.example.yaml
+  # (renamed & configured for your ClusterSecretStore) in an overlay.
+
+commonLabels:
+  app.kubernetes.io/part-of: openpilot-backend
