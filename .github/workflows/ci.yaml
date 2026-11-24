@@ -55,6 +55,12 @@ jobs:
           dockerfile: Dockerfile.frontend
           failure-threshold: error
 
+      - name: Lint Dockerfile.minikeyvalue
+        uses: hadolint/hadolint-action@v3.5.0
+        with:
+          dockerfile: Dockerfile.minikeyvalue
+          failure-threshold: error
+
       - name: Validate YAML files
         run: |
           python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
@@ -72,14 +78,15 @@ jobs:
               print(f"OK: {p}")
           '
 
-      - name: Scan repo for secrets & misconfigurations (Trivy)
+      - name: Scan repo for vulnerabilities, secrets & misconfigurations (Trivy)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
-          scanners: secret,misconfig
+          scanners: vuln,secret,misconfig
           severity: CRITICAL,HIGH
-          exit-code: "0"
+          ignore-unfixed: true
+          exit-code: "1"
 
   rustfmt:
     name: Check Formatting
@@ -326,7 +333,29 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
-      - name: Build and push backend image
+      - name: Build backend image (local for Trivy scan)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: local/backend:scan
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Scan backend image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: local/backend:scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Push backend image to GHCR
         id: build
         uses: docker/build-push-action@v7
         with:
@@ -341,15 +370,6 @@ jobs:
           build-args: |
             BUILD_SHA=${{ github.sha }}
           cache-from: type=gha,scope=backend
-          cache-to: type=gha,mode=max,scope=backend
-
-      - name: Scan backend image for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/backend@${{ steps.build.outputs.digest }}
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "0"
 
   build-frontend:
     name: Build & Push Frontend Image
@@ -398,7 +418,30 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
-      - name: Build and push frontend image
+      - name: Build frontend image (local for Trivy scan)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: local/frontend:scan
+          build-args: |
+            VITE_APP_GIT_SHA=${{ steps.frontend_git.outputs.sha }}
+            VITE_APP_GIT_TIMESTAMP=${{ steps.frontend_git.outputs.timestamp }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Scan frontend image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: local/frontend:scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Push frontend image to GHCR
         id: build
         uses: docker/build-push-action@v7
         with:
@@ -414,15 +457,6 @@ jobs:
             VITE_APP_GIT_SHA=${{ steps.frontend_git.outputs.sha }}
             VITE_APP_GIT_TIMESTAMP=${{ steps.frontend_git.outputs.timestamp }}
           cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
-
-      - name: Scan frontend image for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/frontend@${{ steps.build.outputs.digest }}
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "0"
 
   build-minikeyvalue:
     name: Build & Push MiniKeyValue Image
@@ -468,7 +502,27 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
-      - name: Build and push minikeyvalue image
+      - name: Build minikeyvalue image (local for Trivy scan)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile.minikeyvalue
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: local/minikeyvalue:scan
+          cache-from: type=gha,scope=minikeyvalue
+          cache-to: type=gha,mode=max,scope=minikeyvalue
+
+      - name: Scan minikeyvalue image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: local/minikeyvalue:scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Push minikeyvalue image to GHCR
         id: build
         uses: docker/build-push-action@v7
         with:
@@ -481,12 +535,3 @@ jobs:
           provenance: mode=max
           sbom: true
           cache-from: type=gha,scope=minikeyvalue
-          cache-to: type=gha,mode=max,scope=minikeyvalue
-
-      - name: Scan minikeyvalue image for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/minikeyvalue@${{ steps.build.outputs.digest }}
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "0"
