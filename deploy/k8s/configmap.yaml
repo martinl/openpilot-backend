@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openpilot-config
+data:
+  LOCO_ENV: "useradmin"
+  USERADMIN_PORT: "3112"
+  ENABLE_INTERNAL_TLS: "false"
+  LOG_LEVEL: "info"
+  DB_MAX_CONNECTIONS: "30"
+  MKV_ENDPOINT: "http://minikeyvalue:3000"
+  # Optional: enables live PVC disk usage on /useradmin server usage page
+  PROMETHEUS_URL: "http://kube-prometheus-stack-prometheus.monitoring:9090"
+  # Optional: "metric" (default, km) or "imperial" (mi)
+  STATS_UNIT: "metric"
+  MAILER_HOST: "localhost"
+  MAILER_PORT: "1025"
+  # Replace example.com with your domain (or override via Kustomize overlay)
+  API_ENDPOINT: "https://api.example.com"
+  ATHENA_ENDPOINT: "https://athena.example.com"
+  WS_ENDPOINT: "wss://api.example.com/ws"
+  FRONTEND_URL: "https://connect.example.com"
+  USERADMIN_URL: "https://useradmin.example.com"
+  USERADMIN_HOST: "useradmin.example.com"
+  COOKIE_DOMAIN: ".example.com"
+  COOKIE_NAME: "jwt"

@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openpilot-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openpilot-frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openpilot-frontend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: frontend
+          image: ghcr.io/martinl/openpilot-frontend:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: API_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: openpilot-config
+                  key: API_ENDPOINT
+            - name: ATHENA_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: openpilot-config
+                  key: ATHENA_ENDPOINT
+            - name: GITHUB_CLIENT
+              valueFrom:
+                secretKeyRef:
+                  name: openpilot-secrets
+                  key: GITHUB_CLIENT
+            - name: USERADMIN_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: openpilot-config
+                  key: USERADMIN_URL
+            - name: MAPBOX_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: openpilot-secrets
+                  key: MAPBOX_TOKEN
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
