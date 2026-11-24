@@ -20,3 +20,15 @@ resources:
 
 commonLabels:
   app.kubernetes.io/part-of: openpilot-backend
+
+configMapGenerator:
+  - name: openpilot-grafana-dashboards
+    files:
+      - dashboards/openpilot-red.json
+      - dashboards/openpilot-app.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Openpilot

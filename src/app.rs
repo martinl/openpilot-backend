@@ -147,34 +147,60 @@ impl Hooks for App {
         let ping_manager: Arc<ConnectionManager> = connection_manager.clone();
         let metrics_tracker: Arc<UploadTracker> = upload_tracker.clone();
         let db_clone: DatabaseConnection = ctx.db.clone();
+        let ping_shutdown = crate::framework::shutdown::shutdown_token();
         tokio::spawn(async move {
             let mut interval = time::interval(time::Duration::from_secs(10)); // Ping every 10 seconds
             loop {
-                interval.tick().await;
-                crate::controllers::ws::send_ping_to_all_devices(
-                    ping_manager.clone(),
-                    &db_clone.clone(),
-                )
-                .await;
-                let online_devices = ping_manager.online_device_count().await;
-                let (active_uploads, active_upload_bytes) = metrics_tracker.active_stats();
-                crate::common::metrics::record_runtime_gauges(
-                    online_devices,
-                    active_uploads,
-                    active_upload_bytes,
-                );
+                tokio::select! {
+                    _ = ping_shutdown.cancelled() => {
+                        tracing::info!("Stopping Athena ping & metrics loop");
+                        break;
+                    }
+                    _ = interval.tick() => {
+                        crate::controllers::ws::send_ping_to_all_devices(
+                            ping_manager.clone(),
+                            &db_clone.clone(),
+                        )
+                        .await;
+                        let online_devices = ping_manager.online_device_count().await;
+                        let (active_uploads, active_upload_bytes) = metrics_tracker.active_stats();
+                        crate::common::metrics::record_runtime_gauges(
+                            online_devices,
+                            active_uploads,
+                            active_upload_bytes,
+                        );
+                    }
+                }
             }
         });
 
+        let params_shutdown = crate::framework::shutdown::shutdown_token();
         tokio::spawn({
             let storage = ctx.storage.clone();
             async move {
                 let mut interval = time::interval(time::Duration::from_secs(60)); // Save every 60 seconds
                 loop {
-                    interval.tick().await;
-                    persist_param_value_counts(&storage).await.unwrap();
-                    persist_device_params(&storage).await.unwrap();
-                    tracing::info!("Persisted param value counts");
+                    tokio::select! {
+                        _ = params_shutdown.cancelled() => {
+                            if let Err(e) = persist_param_value_counts(&storage).await {
+                                tracing::warn!(error = %e, "Failed final persist_param_value_counts on shutdown");
+                            }
+                            if let Err(e) = persist_device_params(&storage).await {
+                                tracing::warn!(error = %e, "Failed final persist_device_params on shutdown");
+                            }
+                            tracing::info!("Flushed param counts on shutdown");
+                            break;
+                        }
+                        _ = interval.tick() => {
+                            if let Err(e) = persist_param_value_counts(&storage).await {
+                                tracing::warn!(error = %e, "Failed to persist param value counts");
+                            }
+                            if let Err(e) = persist_device_params(&storage).await {
+                                tracing::warn!(error = %e, "Failed to persist device params");
+                            }
+                            tracing::info!("Persisted param value counts");
+                        }
+                    }
                 }
             }
         });
@@ -198,6 +224,11 @@ impl Hooks for App {
         app: axum::Router,
         server_config: crate::loco_rs::boot::ServeParams,
     ) -> Result<()> {
+        let grace = crate::framework::shutdown::shutdown_timeout();
+        let http_handle = axum_server::Handle::new();
+        let https_handle = axum_server::Handle::new();
+        let metrics_handle = axum_server::Handle::new();
+
         let metrics_port: u16 = env::var("METRICS_PORT")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -205,15 +236,30 @@ impl Hooks for App {
         if metrics_port > 0 {
             let handle = crate::common::metrics::init_prometheus_handle();
             let metrics_addr = SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, metrics_port));
+            let m_handle = metrics_handle.clone();
             tracing::info!("Binding Prometheus metrics on {}/metrics", metrics_addr);
             tokio::spawn(async move {
                 let metrics_app = crate::common::metrics::metrics_router(handle);
                 if let Err(e) = axum_server::bind(metrics_addr)
+                    .handle(m_handle)
                     .serve(metrics_app.into_make_service())
                     .await
                 {
                     tracing::error!("Metrics server failed: {e}");
                 }
+            });
+        }
+
+        {
+            let http_h = http_handle.clone();
+            let https_h = https_handle.clone();
+            let metrics_h = metrics_handle.clone();
+            tokio::spawn(async move {
+                crate::framework::shutdown::wait_for_signal().await;
+                crate::framework::shutdown::shutdown_token().cancel();
+                http_h.graceful_shutdown(Some(grace));
+                https_h.graceful_shutdown(Some(grace));
+                metrics_h.graceful_shutdown(Some(grace));
             });
         }
 
@@ -249,31 +295,35 @@ impl Hooks for App {
             tracing::info!("Binding HTTP on {} and HTTPS on {}", http_addr, https_addr);
             let https_server = tokio::spawn(async move {
                 axum_server::bind_rustls(https_addr, config)
+                    .handle(https_handle)
                     .serve(app.into_make_service())
                     .await
             });
             let http_server = tokio::spawn(async move {
                 axum_server::bind(http_addr)
+                    .handle(http_handle)
                     .serve(app_clone.into_make_service())
                     .await
             });
 
             if let Err(e) = http_server.await {
-                eprintln!("HTTP server failed: {}", e);
+                tracing::error!("HTTP server task failed: {e}");
             }
             if let Err(e) = https_server.await {
-                eprintln!("HTTPS server failed: {}", e);
+                tracing::error!("HTTPS server task failed: {e}");
             }
         } else {
             tracing::info!("Binding HTTP on {} (internal TLS disabled)", http_addr);
             if let Err(e) = axum_server::bind(http_addr)
+                .handle(http_handle)
                 .serve(app.into_make_service())
                 .await
             {
-                eprintln!("HTTP server failed: {}", e);
+                tracing::error!("HTTP server failed: {e}");
             }
         }
 
+        crate::framework::shutdown::drain_workers(grace).await;
         Ok(())
     }
 }
@@ -435,6 +485,34 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(athena_resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn healthz_returns_ok_and_readyz_reports_disconnected_db() {
+        let app = test_router();
+
+        let health_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/healthz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(health_resp.status(), StatusCode::OK);
+
+        let ready_resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(ready_resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 }
 

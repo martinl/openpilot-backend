@@ -7,6 +7,7 @@ data:
   USERADMIN_PORT: "3112"
   ENABLE_INTERNAL_TLS: "false"
   LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
   DB_MAX_CONNECTIONS: "30"
   MKV_ENDPOINT: "http://minikeyvalue:3000"
   # Optional: enables live PVC disk usage on /useradmin server usage page

@@ -14,7 +14,7 @@ tera = "1.20"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 eyre = "0.6"
-tokio = { version = "1.40.0", default-features = false, features = ["time", "process", "io-util", "rt-multi-thread", "macros", "fs", "net", "sync"] }
+tokio = { version = "1.40.0", default-features = false, features = ["time", "process", "io-util", "rt-multi-thread", "macros", "fs", "net", "sync", "signal"] }
 async-trait = "0.1.80"
 tracing = "0.1.40"
 chrono = { version = "0.4", features = ["serde"] }
@@ -40,9 +40,9 @@ regex = "~1.10.4"
 capnp = "0.25"
 futures = "0.3.30"
 async-compression = { version = "0.4.8", features = ["tokio", "bzip2", "zstd"] }
-tokio-util = { version = "0.7.10", features = ["io"] }
+tokio-util = { version = "0.7.10", features = ["io", "rt"] }
 url = "2.5.9"
-tower-http = { version = "0.6", features = ["normalize-path", "cors", "fs", "trace", "catch-panic"] }
+tower-http = { version = "0.6", features = ["normalize-path", "cors", "fs", "trace", "catch-panic", "request-id"] }
 tower-layer = "0.3.2"
 futures-util = "0.3.30"
 tokio-tungstenite = "0.30.0"

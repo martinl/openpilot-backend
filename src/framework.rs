@@ -11,9 +11,85 @@ use sea_orm_migration::MigratorTrait;
 use tower_http::{
     catch_panic::CatchPanicLayer,
     cors::{AllowOrigin, CorsLayer},
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
+
+pub mod shutdown {
+    use std::{env, sync::OnceLock, time::Duration};
+
+    use tokio_util::{sync::CancellationToken, task::TaskTracker};
+
+    static SHUTDOWN_TOKEN: OnceLock<CancellationToken> = OnceLock::new();
+    static WORKER_TRACKER: OnceLock<TaskTracker> = OnceLock::new();
+
+    pub fn shutdown_token() -> CancellationToken {
+        SHUTDOWN_TOKEN.get_or_init(CancellationToken::new).clone()
+    }
+
+    pub fn worker_tracker() -> &'static TaskTracker {
+        WORKER_TRACKER.get_or_init(TaskTracker::new)
+    }
+
+    pub fn shutdown_timeout() -> Duration {
+        let secs: u64 = env::var("SHUTDOWN_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|&s| s > 0)
+            .unwrap_or(30);
+        Duration::from_secs(secs)
+    }
+
+    pub async fn wait_for_signal() {
+        let ctrl_c = async {
+            if let Err(e) = tokio::signal::ctrl_c().await {
+                tracing::error!(error = %e, "Failed to install Ctrl+C signal handler");
+                std::future::pending::<()>().await;
+            }
+        };
+
+        #[cfg(unix)]
+        let terminate = async {
+            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                Ok(mut sig) => {
+                    sig.recv().await;
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "Failed to install SIGTERM signal handler");
+                    std::future::pending::<()>().await;
+                }
+            }
+        };
+
+        #[cfg(not(unix))]
+        let terminate = std::future::pending::<()>();
+
+        tokio::select! {
+            _ = ctrl_c => tracing::info!("Received SIGINT (Ctrl+C), starting graceful shutdown"),
+            _ = terminate => tracing::info!("Received SIGTERM, starting graceful shutdown"),
+        }
+    }
+
+    pub async fn drain_workers(timeout: Duration) {
+        let tracker = worker_tracker();
+        tracker.close();
+        let remaining = tracker.len();
+        if remaining == 0 {
+            return;
+        }
+        tracing::info!(in_flight_workers = remaining, "Draining background workers");
+        if tokio::time::timeout(timeout, tracker.wait()).await.is_err() {
+            tracing::warn!(
+                remaining_workers = tracker.len(),
+                timeout_secs = timeout.as_secs(),
+                "Timed out waiting for background workers to finish"
+            );
+        } else {
+            tracing::info!("All background workers drained cleanly");
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -519,11 +595,32 @@ pub mod controller {
         }
 
         pub fn into_router(self, ctx: AppContext) -> Router {
-            let mut router = Router::new();
+            let mut router = Router::new()
+                .route("/healthz", axum::routing::get(healthz_handler))
+                .route("/readyz", axum::routing::get(readyz_handler));
             for route in self.routes {
                 router = router.merge(route.into_router());
             }
             router.with_state(ctx)
+        }
+    }
+
+    async fn healthz_handler() -> impl IntoResponse {
+        (axum::http::StatusCode::OK, "ok")
+    }
+
+    async fn readyz_handler(
+        axum::extract::State(ctx): axum::extract::State<AppContext>,
+    ) -> impl IntoResponse {
+        match ctx.db.ping().await {
+            Ok(()) => (axum::http::StatusCode::OK, "ok"),
+            Err(e) => {
+                tracing::warn!(error = %e, "Readiness check failed: database ping error");
+                (
+                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                    "database unavailable",
+                )
+            }
         }
     }
 }
@@ -575,7 +672,7 @@ pub mod worker {
                 .rsplit("::")
                 .next()
                 .unwrap_or("unknown");
-            tokio::spawn(async move {
+            super::shutdown::worker_tracker().spawn(async move {
                 let start = std::time::Instant::now();
                 let status = match worker.perform(args).await {
                     Ok(()) => "ok",
@@ -728,6 +825,31 @@ pub mod boot {
         pub processor: Option<worker::Processor>,
     }
 
+    pub const X_REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
+
+    pub fn apply_request_id_and_trace(router: Router) -> Router {
+        let trace_layer = TraceLayer::new_for_http().make_span_with(
+            |request: &axum::http::Request<axum::body::Body>| {
+                let request_id = request
+                    .headers()
+                    .get(&X_REQUEST_ID)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("-");
+                tracing::info_span!(
+                    "http_request",
+                    method = %request.method(),
+                    uri = %request.uri(),
+                    request_id = %request_id,
+                )
+            },
+        );
+
+        router
+            .layer(PropagateRequestIdLayer::new(X_REQUEST_ID))
+            .layer(trace_layer)
+            .layer(SetRequestIdLayer::new(X_REQUEST_ID, MakeRequestUuid))
+    }
+
     fn build_cors_layer() -> CorsLayer {
         let mut origins: Vec<HeaderValue> = Vec::new();
         for var in ["FRONTEND_URL", "USERADMIN_URL", "API_ENDPOINT"] {
@@ -752,7 +874,9 @@ pub mod boot {
                 header::AUTHORIZATION,
                 header::CONTENT_TYPE,
                 HeaderName::from_static("x-requested-with"),
+                X_REQUEST_ID,
             ])
+            .expose_headers([X_REQUEST_ID])
             .max_age(Duration::from_secs(86400));
 
         if origins.is_empty() {
@@ -838,8 +962,8 @@ pub mod boot {
         router = router
             .layer(DefaultBodyLimit::max(500 * 1024 * 1024))
             .layer(build_cors_layer())
-            .layer(CatchPanicLayer::new())
-            .layer(TraceLayer::new_for_http());
+            .layer(CatchPanicLayer::new());
+        router = apply_request_id_and_trace(router);
 
         Ok(BootResult {
             app_context,
@@ -861,11 +985,41 @@ pub mod cli {
         Result,
     };
 
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(crate) enum LogFormat {
+        Compact,
+        Json,
+        Pretty,
+    }
+
+    pub(crate) fn parse_log_format(val: Option<&str>) -> LogFormat {
+        match val.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+            Some("json") => LogFormat::Json,
+            Some("pretty") => LogFormat::Pretty,
+            _ => LogFormat::Compact,
+        }
+    }
+
     fn init_tracing() {
         let default_level = std::env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
         let filter =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level));
-        let _ = fmt().with_env_filter(filter).compact().try_init();
+        let log_format = parse_log_format(std::env::var("LOG_FORMAT").ok().as_deref());
+        match log_format {
+            LogFormat::Json => {
+                let _ = fmt()
+                    .with_env_filter(filter)
+                    .json()
+                    .with_current_span(true)
+                    .try_init();
+            }
+            LogFormat::Pretty => {
+                let _ = fmt().with_env_filter(filter).pretty().try_init();
+            }
+            LogFormat::Compact => {
+                let _ = fmt().with_env_filter(filter).compact().try_init();
+            }
+        }
     }
 
     fn parse_env_arg(args: &[String]) -> Environment {
@@ -902,7 +1056,9 @@ pub mod cli {
                     };
                     H::serve(router, serve_params).await?;
                 } else {
-                    std::future::pending::<()>().await;
+                    super::shutdown::wait_for_signal().await;
+                    super::shutdown::shutdown_token().cancel();
+                    super::shutdown::drain_workers(super::shutdown::shutdown_timeout()).await;
                 }
             }
             "task" => {
@@ -1268,5 +1424,63 @@ mod tests {
         let bad_vars = task::Vars::default();
         assert!(tasks.run("dummy", &ctx, &bad_vars).await.is_err());
         assert!(tasks.run("unknown", &ctx, &ok_vars).await.is_err());
+    }
+
+    #[test]
+    fn parse_log_format_handles_json_pretty_and_defaults_to_compact() {
+        assert_eq!(cli::parse_log_format(Some("json")), cli::LogFormat::Json);
+        assert_eq!(cli::parse_log_format(Some(" JSON ")), cli::LogFormat::Json);
+        assert_eq!(
+            cli::parse_log_format(Some("pretty")),
+            cli::LogFormat::Pretty
+        );
+        assert_eq!(
+            cli::parse_log_format(Some("compact")),
+            cli::LogFormat::Compact
+        );
+        assert_eq!(
+            cli::parse_log_format(Some("other")),
+            cli::LogFormat::Compact
+        );
+        assert_eq!(cli::parse_log_format(None), cli::LogFormat::Compact);
+    }
+
+    #[tokio::test]
+    async fn request_id_middleware_generates_and_preserves_header() {
+        use axum::{body::Body, http::Request, routing::get};
+        use tower::ServiceExt;
+
+        let app = boot::apply_request_id_and_trace(
+            Router::new().route("/ping", get(|| async { "pong" })),
+        );
+
+        let resp = app
+            .clone()
+            .oneshot(Request::builder().uri("/ping").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let generated = resp
+            .headers()
+            .get(&boot::X_REQUEST_ID)
+            .expect("x-request-id should be generated")
+            .to_str()
+            .unwrap();
+        assert!(uuid::Uuid::parse_str(generated).is_ok());
+
+        let resp_existing = app
+            .oneshot(
+                Request::builder()
+                    .uri("/ping")
+                    .header(&boot::X_REQUEST_ID, "req-upstream-123")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            resp_existing.headers().get(&boot::X_REQUEST_ID).unwrap(),
+            "req-upstream-123"
+        );
     }
 }

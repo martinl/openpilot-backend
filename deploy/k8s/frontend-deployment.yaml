@@ -19,6 +19,26 @@ spec:
         fsGroup: 101
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: copy-html
+          image: ghcr.io/martinl/openpilot-frontend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["cp", "-a", "/usr/share/nginx/html/.", "/html/"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: html
+              mountPath: /html
       containers:
         - name: frontend
           image: ghcr.io/martinl/openpilot-frontend:latest
@@ -77,8 +97,12 @@ spec:
               cpu: 250m
               memory: 128Mi
           volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
             - name: tmp
               mountPath: /tmp
       volumes:
+        - name: html
+          emptyDir: {}
         - name: tmp
           emptyDir: {}
