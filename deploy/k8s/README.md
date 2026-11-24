@@ -38,7 +38,8 @@ kind: Kustomization
 namespace: openpilot
 
 resources:
-  - https://github.com/martinl/openpilot-backend//deploy/k8s?ref=v0.1.0
+  # submodules=false skips cloning the large openpilot C++/Python submodule
+  - https://github.com/martinl/openpilot-backend//deploy/k8s?ref=v0.1.0&submodules=false
   - externalsecret.yaml
 
 images:
