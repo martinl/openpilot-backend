@@ -7,12 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
-- Multi-stage container images (`Dockerfile`, `Dockerfile.frontend`) with non-root runtime configuration and startup runtime config injection (`config.js`) for immutable promotion across environments.
+- Multi-stage container images (`Dockerfile`, `Dockerfile.frontend`, `Dockerfile.minikeyvalue`) with non-root runtime configuration, `HEALTHCHECK` instructions, and startup runtime config injection (`config.js`) for immutable promotion across environments.
+- Hardened `minikeyvalue` image (`Dockerfile.minikeyvalue` + `deploy/docker/minikeyvalue-entrypoint.sh`: `golang:1-alpine` → `nginx:stable-alpine`, non-root `mkv` user, single nginx instance with configurable `MKV_NGINX_WORKERS`, persistent `/data` storage, `MKV_VOLUME_HOST` support) replacing the EOL `ubuntu:20.04` upstream Dockerfile in CI.
 - GitHub Actions CI/CD workflow (`.github/workflows/ci.yaml`) with `rustfmt`, `clippy`, `cargo-audit`, PostgreSQL 18 integration tests, `cargo-llvm-cov` coverage reporting (`--fail-under-lines 50` gate and Shields.io badge), Trivy image scans, and GHCR image publishing on `main`/`master` merges and release tags.
 - Frontend Docker build metadata wiring (`VITE_APP_GIT_SHA`, `VITE_APP_GIT_TIMESTAMP`) from the `frontend` submodule into `BuildInfo`.
 - Native Prometheus metrics exporter on internal `:9090/metrics` (`METRICS_PORT`) with explicit histogram buckets for HTTP RED metrics (`http_requests_total`, `http_request_duration_seconds`, `http_requests_in_flight`), Athena connected devices, active uploads, and background worker jobs (`worker_jobs_total`, `worker_job_duration_seconds`).
 - Grafana RED (`deploy/grafana/dashboards/openpilot-red.json`) and Application/Storage/PostgreSQL (`deploy/grafana/dashboards/openpilot-app.json`) dashboards.
-- Expanded test suite from 13 to 55 unit tests plus end-to-end PostgreSQL 18 integration tests (`tests/models_integration.rs`, `tests/v1_and_admin_api.rs`, `tests/connect_io_api.rs`) backed by an in-process `MockMkvServer`.
+- Prometheus-backed Kubernetes PVC disk usage reporting on the `useradmin` server usage page (`PROMETHEUS_URL`, auto-detected pod namespace via `PROMETHEUS_NAMESPACE`, with `sysinfo` fallback).
+- Optional `STATS_UNIT` environment variable (`metric` default / `imperial`) for `useradmin` and server usage distance units.
+- Expanded test suite from 13 to 57 unit tests plus end-to-end PostgreSQL 18 integration tests (`tests/models_integration.rs`, `tests/v1_and_admin_api.rs`, `tests/connect_io_api.rs`) backed by an in-process `MockMkvServer`.
 - Comma.ai OpenAPI 3.1 contract test suite (`tests/openapi_contract.rs` against vendored `tests/fixtures/comma-openapi.json`) validating implemented routes and live JSON responses.
 - Pre-commit configuration (`.pre-commit-config.yaml`) including RustSec `cargo-audit` checks.
 - Parameterized environment configuration for OAuth, cookies (`COOKIE_NAME`, `COOKIE_DOMAIN`), CORS origins, optional internal TLS, and Connect frontend endpoints.
@@ -32,6 +35,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Mounted Athena JSON-RPC on root `POST /{dongle_id}` alongside `POST /ws/{dongle_id}` to match OpenAPI and Connect frontend clients.
 - Unauthenticated and invalid-JWT requests on `useradmin-*` subdomains now redirect to `/login` instead of returning `401`.
 - Set `Content-Type: application/vnd.apple.mpegurl` on HLS `qcamera.m3u8` playlists and bumped `frontend` to prefer native HLS on Safari (fixing black video playback on macOS Safari) and fix QR scanner pairing.
+- Normalized CRLF line endings in `useradmin` HTML templates and fixed distance unit double-conversion in `server_usage.html`.
+
+### Removed
+- Unused `capnproto-rust` and `my-comma-auth` submodules and `.devcontainer/`.
+- Legacy/unused repository files (committed `target/release/connect-cli`, upstream `users_devices.backup`, dead Loco `config/*.yaml`, unused `assets/`, root `*.sh`, `scripts/`, `nginx.conf`, and `fetch/`).
 
 ### Security
 - Upgraded `url` to `2.5.9` (`RUSTSEC-2026-0592`) and `cookie` to `0.18.3` (`RUSTSEC-2026-0594`).

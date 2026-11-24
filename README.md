@@ -14,7 +14,7 @@ Forked from `konik-ai/backend` and adapted for containerized / Kubernetes deploy
 Built and published automatically by [.github/workflows/ci.yaml](.github/workflows/ci.yaml) after all lint, format, security audit, clippy, unit + PostgreSQL integration tests, and the 50%+ line coverage gate (`cargo-llvm-cov`) pass:
 - `ghcr.io/martinl/openpilot-backend/backend` ([Dockerfile](Dockerfile) — Rust `connect-cli`, `LOCO_ENV=useradmin`, HTTP port `3112`, internal Prometheus metrics port `9090`)
 - `ghcr.io/martinl/openpilot-backend/frontend` ([Dockerfile.frontend](Dockerfile.frontend) — `martinl/openpilot-frontend` SPA on `nginx:stable-alpine`, port `80`)
-- `ghcr.io/martinl/openpilot-backend/minikeyvalue` (`minikeyvalue/Dockerfile` — blob storage, ports `3000-3005`)
+- `ghcr.io/martinl/openpilot-backend/minikeyvalue` ([Dockerfile.minikeyvalue](Dockerfile.minikeyvalue) — multi-stage `golang:1-alpine` → `nginx:stable-alpine`, non-root `mkv` UID `1000`, single nginx instance, persistent data at `/data`, ports `3000-3005`)
 
 See [CHANGES.md](CHANGES.md) for the full changelog.
 
@@ -63,7 +63,7 @@ Copy [.env_template](.env_template) to `.env` and fill in your endpoints, databa
 ```bash
 docker build -t openpilot-backend:local -f Dockerfile .
 docker build -t openpilot-frontend:local -f Dockerfile.frontend .
-docker build -t openpilot-minikeyvalue:local -f minikeyvalue/Dockerfile ./minikeyvalue
+docker build -t openpilot-minikeyvalue:local -f Dockerfile.minikeyvalue .
 ```
 
 ### 4. Native Cargo Tests (macOS)
@@ -92,3 +92,7 @@ The backend exposes a Prometheus `/metrics` endpoint on an internal-only port (`
 Pre-built Grafana dashboards (for `kube-prometheus-stack` sidecar provisioning or manual import):
 - [deploy/grafana/dashboards/openpilot-red.json](deploy/grafana/dashboards/openpilot-red.json) — HTTP Rate, Errors, and Duration (p50/p95/p99, top & slowest routes)
 - [deploy/grafana/dashboards/openpilot-app.json](deploy/grafana/dashboards/openpilot-app.json) — Athena fleet, active uploads, worker jobs, PVC usage, and CloudNativePG PostgreSQL panels (enable `spec.monitoring.enablePodMonitor: true` on your CNPG `Cluster`)
+
+### Useradmin Server Usage & Units
+- Set `PROMETHEUS_URL` (e.g., `http://kube-prometheus-stack-prometheus.monitoring:9090`) to show live Kubernetes PVC disk usage on the `useradmin` server usage page; `PROMETHEUS_NAMESPACE` is auto-detected from the pod's service account namespace (falls back to local `sysinfo` disks when unset).
+- Set `STATS_UNIT=imperial` for miles on `useradmin` and server usage pages (defaults to `metric` / km).
