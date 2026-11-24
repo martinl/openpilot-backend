@@ -73,11 +73,13 @@ done
 
 echo "}" >> "$CONF"
 
-nginx -c "$CONF" -p /tmp/nginx &
+nginx -c "$CONF" -p /tmp/nginx -e /dev/stderr &
 
 exec /mkv/mkv \
   -port 3000 \
   -volumes "$VOLUMES" \
   -replicas "$MKV_REPLICAS" \
   -db "$MKV_DB" \
-  server -voltimeout "$MKV_VOLTIMEOUT" -v
+  -voltimeout "$MKV_VOLTIMEOUT" \
+  -v \
+  server
