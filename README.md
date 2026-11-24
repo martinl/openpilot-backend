@@ -88,8 +88,8 @@ The backend exposes a Prometheus `/metrics` endpoint on an internal-only port (`
 - **Background Workers:** `worker_jobs_total{worker, status}`, `worker_job_duration_seconds_bucket{worker}`
 
 Pre-built Grafana dashboards (for `kube-prometheus-stack` sidecar provisioning or manual import):
-- [deploy/grafana/dashboards/openpilot-red.json](deploy/grafana/dashboards/openpilot-red.json) — HTTP Rate, Errors, and Duration (p50/p95/p99, top & slowest routes)
-- [deploy/grafana/dashboards/openpilot-app.json](deploy/grafana/dashboards/openpilot-app.json) — Athena fleet, active uploads, worker jobs, PVC usage, and CloudNativePG PostgreSQL panels (enable `spec.monitoring.enablePodMonitor: true` on your CNPG `Cluster`)
+- [deploy/k8s/dashboards/openpilot-red.json](deploy/k8s/dashboards/openpilot-red.json) — HTTP Rate, Errors, and Duration (p50/p95/p99, top & slowest routes)
+- [deploy/k8s/dashboards/openpilot-app.json](deploy/k8s/dashboards/openpilot-app.json) — Athena fleet, active uploads, worker jobs, PVC usage, and CloudNativePG PostgreSQL panels (enable `spec.monitoring.enablePodMonitor: true` on your CNPG `Cluster`)
 
 ### Useradmin Server Usage & Units
 - Set `PROMETHEUS_URL` (e.g., `http://kube-prometheus-stack-prometheus.monitoring:9090`) to show live Kubernetes PVC disk usage on the `useradmin` server usage page; `PROMETHEUS_NAMESPACE` is auto-detected from the pod's service account namespace (falls back to local `sysinfo` disks when unset).

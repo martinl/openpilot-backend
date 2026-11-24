@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - GitHub Actions CI/CD workflow (`.github/workflows/ci.yaml`) with `rustfmt`, `clippy`, `cargo-audit`, PostgreSQL 18 integration tests, `cargo-llvm-cov` coverage reporting (`--fail-under-lines 50` gate and Shields.io badge), Trivy image scans, and GHCR image publishing on `main`/`master` merges and release tags.
 - Frontend Docker build metadata wiring (`VITE_APP_GIT_SHA`, `VITE_APP_GIT_TIMESTAMP`) from the `frontend` submodule into `BuildInfo`.
 - Native Prometheus metrics exporter on internal `:9090/metrics` (`METRICS_PORT`) with explicit histogram buckets for HTTP RED metrics (`http_requests_total`, `http_request_duration_seconds`, `http_requests_in_flight`), Athena connected devices, active uploads, and background worker jobs (`worker_jobs_total`, `worker_job_duration_seconds`).
-- Grafana RED (`deploy/grafana/dashboards/openpilot-red.json`) and Application/Storage/PostgreSQL (`deploy/grafana/dashboards/openpilot-app.json`) dashboards.
+- Grafana RED (`deploy/k8s/dashboards/openpilot-red.json`) and Application/Storage/PostgreSQL (`deploy/k8s/dashboards/openpilot-app.json`) dashboards.
 - Prometheus-backed Kubernetes PVC disk usage reporting on the `useradmin` server usage page (`PROMETHEUS_URL`, auto-detected pod namespace via `PROMETHEUS_NAMESPACE`, with `sysinfo` fallback).
 - Optional `STATS_UNIT` environment variable (`metric` default / `imperial`) for `useradmin` and server usage distance units.
 - Expanded test suite from 13 to 57 unit tests plus end-to-end PostgreSQL 18 integration tests (`tests/models_integration.rs`, `tests/v1_and_admin_api.rs`, `tests/connect_io_api.rs`) backed by an in-process `MockMkvServer`.

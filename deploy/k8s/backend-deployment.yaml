@@ -16,6 +16,7 @@ spec:
       labels:
         app.kubernetes.io/name: openpilot-backend
     spec:
+      terminationGracePeriodSeconds: 35
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -50,15 +51,19 @@ spec:
                   name: openpilot-db-app
                   key: uri
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /readyz
               port: http
-            initialDelaySeconds: 10
+            initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 3
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /healthz
               port: http
-            initialDelaySeconds: 20
+            initialDelaySeconds: 15
             periodSeconds: 20
+            timeoutSeconds: 3
           resources:
             requests:
               cpu: 250m
