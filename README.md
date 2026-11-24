@@ -13,10 +13,9 @@ Forked from `konik-ai/backend` and adapted for containerized / Kubernetes deploy
 
 Built and published automatically by [.github/workflows/ci.yaml](.github/workflows/ci.yaml) after all lint, format, security audit, clippy, unit + PostgreSQL integration tests, and the 50%+ line coverage gate (`cargo-llvm-cov`) pass:
 - `ghcr.io/martinl/openpilot-backend/backend` ([Dockerfile](Dockerfile) — Rust `connect-cli`, `LOCO_ENV=useradmin`, HTTP port `3112`, internal Prometheus metrics port `9090`)
-- `ghcr.io/martinl/openpilot-backend/frontend` ([Dockerfile.frontend](Dockerfile.frontend) — `martinl/openpilot-frontend` SPA on `nginx:stable-alpine`, port `80`)
 - `ghcr.io/martinl/openpilot-backend/minikeyvalue` ([Dockerfile.minikeyvalue](Dockerfile.minikeyvalue) — multi-stage `golang:1-alpine` → `nginx:stable-alpine`, non-root `mkv` UID `1000`, single nginx instance, persistent data at `/data`, ports `3000-3005`)
 
-See [CHANGES.md](CHANGES.md) for the full changelog.
+The Connect web SPA container image is built and published separately in [`martinl/openpilot-frontend`](https://github.com/martinl/openpilot-frontend). See [CHANGES.md](CHANGES.md) for the full changelog.
 
 Tagging:
 - Push to `master`/`main` → `:test` and `:sha-<short>`
@@ -49,7 +48,7 @@ git submodule sync openpilot
 git submodule update --init --depth 1 openpilot
 git -C openpilot submodule sync opendbc_repo
 git -C openpilot submodule update --init --depth 1 opendbc_repo
-git submodule update --init --depth 1 frontend minikeyvalue
+git submodule update --init --depth 1 minikeyvalue
 
 # Optional local hooks (gitleaks, hadolint, rustfmt, cargo-audit, yaml/CRLF checks)
 brew install pre-commit hadolint cargo-audit
@@ -62,7 +61,6 @@ Copy [.env_template](.env_template) to `.env` and fill in your endpoints, databa
 ### 3. Local Docker Builds
 ```bash
 docker build -t openpilot-backend:local -f Dockerfile .
-docker build -t openpilot-frontend:local -f Dockerfile.frontend .
 docker build -t openpilot-minikeyvalue:local -f Dockerfile.minikeyvalue .
 ```
 
