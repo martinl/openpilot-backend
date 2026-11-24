@@ -472,8 +472,8 @@ jobs:
         id: build
         uses: docker/build-push-action@v7
         with:
-          context: ./minikeyvalue
-          file: ./minikeyvalue/Dockerfile
+          context: .
+          file: ./Dockerfile.minikeyvalue
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
