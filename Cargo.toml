@@ -36,7 +36,7 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json"] }
 reqwest = { version = "0.13", features = ["stream", "json", "form"] }
 dotenvy = "0.15"
 bytes = "1.6.0"
-regex = "~1.10.4"
+regex = "~1.13.2"
 capnp = "0.25"
 futures = "0.3.30"
 async-compression = { version = "0.4.8", features = ["tokio", "bzip2", "zstd"] }
