@@ -712,6 +712,9 @@ async fn parse_qlog(
 
     let mut cursor = Cursor::new(decompressed_data);
     let mut onroad_mono_time: Option<u64> = None;
+    let mut first_mono_time: Option<u64> = None;
+    let mut user_bookmark_times: Vec<u64> = Vec::new();
+    let mut bookmark_button_times: Vec<u64> = Vec::new();
     let mut gps_seen = false;
     let mut thumbnails: Vec<Vec<u8>> = Vec::new();
     let mut total_meters_traveled = 0.0; // gets converted to miles
@@ -747,6 +750,9 @@ async fn parse_qlog(
             }
             Ok(event_type) => {
                 let log_mono_time = event.get_log_mono_time();
+                if first_mono_time.is_none() {
+                    first_mono_time = Some(log_mono_time);
+                }
                 match event_type {
                     LogEvent::GpsLocationExternal(gps) | LogEvent::GpsLocation(gps) => {
                         if let Ok(gps) = gps {
@@ -773,8 +779,9 @@ async fn parse_qlog(
                                     total_meters_traveled += meters;
 
                                     if let Some(onroad_mono_time) = onroad_mono_time {
-                                        let route_time =
-                                            (log_mono_time - onroad_mono_time) / 1000000000; // time since the start of route
+                                        let route_time = log_mono_time
+                                            .saturating_sub(onroad_mono_time)
+                                            / 1_000_000_000; // time since the start of route
                                         coordinates.push(serde_json::json!({
                                             "t": route_time,
                                             "lat": lat,
@@ -882,7 +889,7 @@ async fn parse_qlog(
 
                             if let Some(onroad_mono_time) = onroad_mono_time {
                                 let route_offset_millis =
-                                    (log_mono_time - onroad_mono_time) / 1000000;
+                                    log_mono_time.saturating_sub(onroad_mono_time) / 1_000_000;
 
                                 // Check if state changed or if this is the first event
                                 if last_state.is_none() || last_state.as_ref() != Some(&new_state) {
@@ -924,6 +931,12 @@ async fn parse_qlog(
                             }
                         }
                     }
+                    LogEvent::UserBookmark(_) => {
+                        user_bookmark_times.push(log_mono_time);
+                    }
+                    LogEvent::BookmarkButton(_) => {
+                        bookmark_button_times.push(log_mono_time);
+                    }
                     LogEvent::Can(_) => {
                         seg.can = ActiveValue::Set(true);
                     }
@@ -946,6 +959,16 @@ async fn parse_qlog(
     if readable_messages == 0 {
         return Err(sidekiq::Error::Message(EMPTY_QLOG_ERROR.to_string()));
     }
+
+    let segment_num = args.segment.parse::<u64>().unwrap_or(0);
+    merge_and_append_bookmarks(
+        &mut events,
+        &user_bookmark_times,
+        &bookmark_button_times,
+        onroad_mono_time,
+        first_mono_time,
+        segment_num,
+    );
 
     if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {
         seg.end_lat = ActiveValue::Set(last_lat);
@@ -1161,14 +1184,66 @@ fn handle_device_params<'a>(
     }
 }
 
+const BOOKMARK_DEDUP_NS: u64 = 500_000_000;
+
+fn merge_and_append_bookmarks(
+    events: &mut Vec<serde_json::Value>,
+    user_bookmarks: &[u64],
+    bookmark_buttons: &[u64],
+    onroad_mono_time: Option<u64>,
+    first_mono_time: Option<u64>,
+    segment_num: u64,
+) {
+    if user_bookmarks.is_empty() && bookmark_buttons.is_empty() {
+        return;
+    }
+
+    let Some(base_mono_time) = onroad_mono_time.or_else(|| {
+        first_mono_time
+            .map(|first| first.saturating_sub(segment_num.saturating_mul(60_000_000_000)))
+    }) else {
+        return;
+    };
+
+    let mut merged: Vec<u64> = user_bookmarks.to_vec();
+    for &btn_ts in bookmark_buttons {
+        let is_dup = merged
+            .iter()
+            .any(|&bm_ts| bm_ts.abs_diff(btn_ts) <= BOOKMARK_DEDUP_NS);
+        if !is_dup {
+            merged.push(btn_ts);
+        }
+    }
+    merged.sort_unstable();
+    merged.dedup_by(|a, b| a.abs_diff(*b) <= BOOKMARK_DEDUP_NS);
+
+    for ts in merged {
+        let route_offset_millis = ts.saturating_sub(base_mono_time) / 1_000_000;
+        events.push(serde_json::json!({
+            "type": "user_bookmark",
+            "time": ts,
+            "route_offset_millis": route_offset_millis,
+            "data": {},
+        }));
+    }
+
+    events.sort_by_key(|ev| {
+        ev.get("route_offset_millis")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        is_truncated_stream_error, looks_like_mpeg_ts, route_has_any_uploads,
-        segment_has_any_upload, TS_PACKET_SIZE, TS_SYNC_MIN_PACKETS,
+        is_truncated_stream_error, looks_like_mpeg_ts, merge_and_append_bookmarks,
+        route_has_any_uploads, segment_has_any_upload, TS_PACKET_SIZE, TS_SYNC_MIN_PACKETS,
     };
+    use crate::cereal::log_capnp::event as LogEvent;
     use crate::models::_entities::segments;
-    use std::io;
+    use capnp::message::{Builder, ReaderOptions};
+    use std::io::{self, Cursor};
 
     #[test]
     fn accepts_mpeg_ts_with_aligned_sync_bytes() {
@@ -1227,5 +1302,111 @@ mod tests {
         };
         assert!(segment_has_any_upload(&qcam_segment));
         assert!(route_has_any_uploads(&[empty_segment, qcam_segment]));
+    }
+
+    #[test]
+    fn capnp_user_bookmarks_and_buttons_emit_sorted_deduped_events() {
+        let onroad_ns: u64 = 1_000_000_000_000;
+        let mut buf = Vec::new();
+
+        // 1. UserBookmark arriving 120ms into route BEFORE the first DeviceState frame
+        {
+            let mut msg = Builder::new_default();
+            let mut ev = msg.init_root::<LogEvent::Builder>();
+            ev.set_log_mono_time(onroad_ns + 120_000_000);
+            ev.init_user_bookmark();
+            capnp::serialize::write_message(&mut buf, &msg).unwrap();
+        }
+        // 2. DeviceState frame arriving at +500ms reporting startedMonoTime = onroad_ns
+        {
+            let mut msg = Builder::new_default();
+            let mut ev = msg.init_root::<LogEvent::Builder>();
+            ev.set_log_mono_time(onroad_ns + 500_000_000);
+            let mut ds = ev.init_device_state();
+            ds.set_started(true);
+            ds.set_started_mono_time(onroad_ns);
+            capnp::serialize::write_message(&mut buf, &msg).unwrap();
+        }
+        // 3. BookmarkButton followed 15ms later by feedbackd UserBookmark (should deduplicate)
+        {
+            let mut msg = Builder::new_default();
+            let mut ev = msg.init_root::<LogEvent::Builder>();
+            ev.set_log_mono_time(onroad_ns + 12_500_000_000);
+            ev.init_bookmark_button();
+            capnp::serialize::write_message(&mut buf, &msg).unwrap();
+        }
+        {
+            let mut msg = Builder::new_default();
+            let mut ev = msg.init_root::<LogEvent::Builder>();
+            ev.set_log_mono_time(onroad_ns + 12_515_000_000);
+            ev.init_user_bookmark();
+            capnp::serialize::write_message(&mut buf, &msg).unwrap();
+        }
+        // 4. Standalone BookmarkButton (e.g. fork without feedbackd) at +30s
+        {
+            let mut msg = Builder::new_default();
+            let mut ev = msg.init_root::<LogEvent::Builder>();
+            ev.set_log_mono_time(onroad_ns + 30_000_000_000);
+            ev.init_bookmark_button();
+            capnp::serialize::write_message(&mut buf, &msg).unwrap();
+        }
+
+        let mut cursor = Cursor::new(buf);
+        let mut parsed_onroad: Option<u64> = None;
+        let mut first_mono: Option<u64> = None;
+        let mut user_bms = Vec::new();
+        let mut btn_bms = Vec::new();
+        let mut events = vec![serde_json::json!({
+            "type": "state",
+            "time": onroad_ns + 5_000_000_000,
+            "route_offset_millis": 5000,
+            "data": { "state": "enabled", "enabled": true, "alertStatus": 0 }
+        })];
+
+        while let Ok(reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default())
+        {
+            let ev = reader.get_root::<LogEvent::Reader>().unwrap();
+            let ts = ev.get_log_mono_time();
+            if first_mono.is_none() {
+                first_mono = Some(ts);
+            }
+            match ev.which().unwrap() {
+                LogEvent::DeviceState(Ok(ds)) if ds.get_started() => {
+                    parsed_onroad = Some(ds.get_started_mono_time());
+                }
+                LogEvent::UserBookmark(_) => user_bms.push(ts),
+                LogEvent::BookmarkButton(_) => btn_bms.push(ts),
+                _ => {}
+            }
+        }
+
+        merge_and_append_bookmarks(
+            &mut events,
+            &user_bms,
+            &btn_bms,
+            parsed_onroad,
+            first_mono,
+            0,
+        );
+
+        let types_and_offsets: Vec<(&str, u64)> = events
+            .iter()
+            .map(|e| {
+                (
+                    e["type"].as_str().unwrap(),
+                    e["route_offset_millis"].as_u64().unwrap(),
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            types_and_offsets,
+            vec![
+                ("user_bookmark", 120),
+                ("state", 5000),
+                ("user_bookmark", 12515),
+                ("user_bookmark", 30000),
+            ]
+        );
     }
 }

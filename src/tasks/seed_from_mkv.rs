@@ -12,7 +12,6 @@ use crate::{
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use serde_json::{from_str, Value};
-use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::sleep;
@@ -228,11 +227,8 @@ impl Task for SeedFromMkv {
             }
         }
         progress_bar.finish_and_clear();
-        loop {
-            let sec = Duration::from_secs(1);
-            thread::sleep(sec);
-            println!("waiting..");
-        }
+        crate::framework::shutdown::drain_workers(Duration::from_secs(600)).await;
+        tracing::info!("Finished reprocessing queued segments");
         Ok(())
     }
 }
